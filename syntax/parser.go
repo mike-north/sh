@@ -240,6 +240,8 @@ func NewParser(options ...ParserOption) *Parser {
 //
 // Parse can be called more than once, but not concurrently. That is, a
 // Parser can be reused once it is done working.
+// A binding limit selected with ParseNestingLimit returns ParseDepthError without
+// a partial File; the parser remains reusable through its ordinary reset path.
 func (p *Parser) Parse(r io.Reader, name string) (*File, error) {
 	p.reset()
 	p.f = &File{Name: name}
@@ -251,6 +253,9 @@ func (p *Parser) Parse(r io.Reader, name string) (*File, error) {
 		// EOF immediately after heredoc word so no newline to
 		// trigger the parsing error.
 		p.doHeredocs()
+	}
+	if _, ok := p.err.(ParseDepthError); ok {
+		return nil, p.err
 	}
 	return p.f, p.err
 }
@@ -524,8 +529,11 @@ type Parser struct {
 	// we're currently parsing.
 	// A non-zero number means that we require certain tokens or words before
 	// reaching EOF, used for [Parser.Incomplete].
-	// It is also the nesting depth, limited by [maxNesting].
+	// It is also the nesting work limited by the upstream or binding policy.
 	openNodes int
+	// parseDepthLimit selects binding policy without changing per-input state.
+	// Zero retains maxNesting; reset clears openNodes but preserves this option.
+	parseDepthLimit int
 	// openBquotes is how many levels of backquotes are open at the moment.
 	openBquotes int
 	// openBquoteDbls is how many of those backquote levels began inside
@@ -567,13 +575,23 @@ const bufSize = 1 << 10
 // or walking the syntax tree. Bash fails at a few thousand nested subshells.
 const maxNesting = 10_000
 
-// enterNode increments [Parser.openNodes], failing if [maxNesting] is exceeded.
+// enterNode increments [Parser.openNodes], enforcing the selected nesting limit.
 // It must be paired with a call to [Parser.leaveNode],
 // or with restoring [Parser.openNodes] to its previous value.
 func (p *Parser) enterNode() {
 	p.openNodes++
-	if p.openNodes > maxNesting {
-		p.curErr("nesting is deeper than %d levels", maxNesting)
+	limit := maxNesting
+	if p.parseDepthLimit > 0 {
+		limit = p.parseDepthLimit
+	}
+	if p.openNodes > limit {
+		if p.parseDepthLimit > 0 {
+			// Use the existing terminal EOF path so recovery options cannot turn a
+			// resource refusal into resumed parsing or a successful partial tree.
+			p.errPass(ParseDepthError{MaxDepth: limit, Depth: p.openNodes})
+		} else {
+			p.curErr("nesting is deeper than %d levels", limit)
+		}
 	}
 }
 
@@ -3036,4 +3054,30 @@ func (p *Parser) funcDecl(s *Stmt, pos Pos, long, withParens bool, names ...*Lit
 		p.followErr(fd.Pos(), "foo()", noQuote("a statement"))
 	}
 	s.Cmd = fd
+}
+
+// ParseDepthError is a binding resource refusal, not a shell grammar diagnostic.
+// It carries no source position or partial tree and is distinct from ParseError.
+type ParseDepthError struct {
+	// MaxDepth is the configured binding policy in native node-nesting units.
+	MaxDepth int
+	// Depth is the rejected work count, not a number of runtime stack frames.
+	Depth int
+}
+
+// Error describes resource accounting without presenting it as invalid grammar.
+func (e ParseDepthError) Error() string {
+	return fmt.Sprintf("parse resource limit: native node nesting work (%d units) exceeds %d", e.Depth, e.MaxDepth)
+}
+
+// ParseNestingLimit selects a binding node-nesting budget without changing shell
+// grammar. Zero retains the official default; configuration survives parser reuse.
+// Negative limits panic, like other invalid parser options. The typed resource
+// failure uses ordinary terminal error propagation in every parser entrypoint;
+// Parse additionally omits its partial File when returning that failure.
+func ParseNestingLimit(limit int) ParserOption {
+	if limit < 0 {
+		panic("negative parse nesting limit")
+	}
+	return func(p *Parser) { p.parseDepthLimit = limit }
 }
