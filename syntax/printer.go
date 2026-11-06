@@ -383,11 +383,29 @@ func (p *Printer) semiOrNewl(s string, pos Pos) {
 }
 
 func (p *Printer) writeLit(s string) {
-	// When writing to an extraIndenter, it escapes any tabs itself while
-	// reindenting '<<-' heredoc body lines.
-	if _, ok := p.w.(*extraIndenter); !ok && strings.Contains(s, "\t") {
-		p.w.WriteByte(tabwriter.Escape)
-		defer p.w.WriteByte(tabwriter.Escape)
+	// Nested <<- writers protect data after stripping indentation; other
+	// writers must hide literal layout-control bytes from text/tabwriter.
+	_, nested := p.w.(*extraIndenter)
+	// Preserve the upstream whole-literal escaping for horizontal tabs. For
+	// VT/FF alone, protect just those data bytes so physical newlines remain
+	// visible to tabwriter's alignment of subsequent lines and comments.
+	if !nested && strings.ContainsAny(s, "\t\v\f") {
+		if strings.Contains(s, "\t") {
+			p.w.WriteByte(tabwriter.Escape)
+			defer p.w.WriteByte(tabwriter.Escape)
+		} else {
+			for {
+				i := strings.IndexAny(s, "\v\f")
+				if i < 0 {
+					break
+				}
+				p.w.WriteString(s[:i])
+				p.w.WriteByte(tabwriter.Escape)
+				p.w.WriteByte(s[i])
+				p.w.WriteByte(tabwriter.Escape)
+				s = s[i+1:]
+			}
+		}
 	}
 	p.w.WriteString(s)
 }
@@ -476,10 +494,13 @@ func (p *Printer) flushHeredocs() {
 		p.wantNewline, p.mustNewline = false, false
 		if r.Op == DashHdoc && p.indentSpaces == 0 && !p.minify {
 			if r.Hdoc != nil {
+				// Only unquoted delimiters join physical lines; following tabs are data.
+				delim := r.Word.Lit()
 				extra := extraIndenter{
 					bufWriter:   p.w,
 					baseIndent:  int(p.level + 1),
 					firstIndent: -1,
+					joinLines:   delim != "" && !strings.Contains(delim, "\\"),
 				}
 				p.tabsPrinter = &Printer{
 					w: &extra,
@@ -780,16 +801,8 @@ func (p *Printer) paramExp(pe *ParamExp) {
 		p.writeLit(pe.Flags.Value)
 		p.w.WriteByte(')')
 	}
-	switch {
-	case pe.Length:
-		p.w.WriteByte('#')
-	case pe.Width:
-		p.w.WriteByte('%')
-	case pe.IsSet:
-		p.w.WriteByte('+')
-	case pe.Excl:
-		p.w.WriteByte('!')
-	}
+	// Option overrides precede length/existence operators in the Zsh grammar.
+	// Reversing these groups changes which parameter and operator are reparsed.
 	for _, pre := range [...]struct {
 		c     byte
 		state OptState
@@ -805,6 +818,16 @@ func (p *Printer) paramExp(pe *ParamExp) {
 		if pre.state == OptOff {
 			p.w.WriteByte(pre.c)
 		}
+	}
+	switch {
+	case pe.Length:
+		p.w.WriteByte('#')
+	case pe.Width:
+		p.w.WriteByte('%')
+	case pe.IsSet:
+		p.w.WriteByte('+')
+	case pe.Excl:
+		p.w.WriteByte('!')
 	}
 	switch {
 	case pe.Param != nil:
@@ -1024,6 +1047,14 @@ func (p *Printer) unquotedWord(w *Word) {
 		case *DblQuoted:
 			p.wordParts(wp.Parts, true)
 		case *Lit:
+			// Quote removal must preserve the delimiter's literal VT and FF,
+			// just as writeLit preserves them in the opening word. Nested <<-
+			// printers leave escaping to extraIndenter after stripping tabs.
+			_, nested := p.w.(*extraIndenter)
+			escape := !nested && strings.ContainsAny(wp.Value, "\v\f")
+			if escape {
+				p.w.WriteByte(tabwriter.Escape)
+			}
 			for i := 0; i < len(wp.Value); i++ {
 				if b := wp.Value[i]; b == '\\' {
 					if i++; i < len(wp.Value) {
@@ -1032,6 +1063,9 @@ func (p *Printer) unquotedWord(w *Word) {
 				} else {
 					p.w.WriteByte(b)
 				}
+			}
+			if escape {
+				p.w.WriteByte(tabwriter.Escape)
 			}
 		}
 	}
@@ -1580,9 +1614,10 @@ const (
 	spaceWritten                    // we have just written a space or newline
 )
 
-// extraIndenter ensures that all lines in a '<<-' heredoc body have at least
-// baseIndent leading tabs. Those that had more tab indentation than the first
-// heredoc line will keep that relative indentation.
+// extraIndenter gives logical lines in a '<<-' heredoc body at least baseIndent
+// leading tabs, preserving relative indentation beyond the first line. Physical
+// lines following a continuation retain their exact bytes: Bash treats their
+// leading tabs as data rather than indentation.
 type extraIndenter struct {
 	bufWriter
 	baseIndent int
@@ -1590,11 +1625,36 @@ type extraIndenter struct {
 	firstIndent int
 	firstChange int
 	curLine     []byte
+
+	// Joining applies only to unquoted heredocs. continued describes the
+	// preceding physical line, independently of the indentation baseline.
+	joinLines bool
+	continued bool
 }
 
 func (e *extraIndenter) WriteByte(b byte) error {
 	e.curLine = append(e.curLine, b)
 	if b != '\n' {
+		return nil
+	}
+	continued := e.continued
+	if e.joinLines {
+		// Pairs quote each other; only an odd trailing run escapes newline.
+		backslashes := 0
+		for i := len(e.curLine) - 2; i >= 0 && e.curLine[i] == '\\'; i-- {
+			backslashes++
+		}
+		e.continued = backslashes%2 != 0
+	}
+	if continued {
+		// Protect continuation data, including tabs on an otherwise empty
+		// line. Leave newline visible so tabwriter ends the row and retains
+		// the existing alignment of subsequent logical lines.
+		e.bufWriter.WriteByte(tabwriter.Escape)
+		e.bufWriter.Write(e.curLine[:len(e.curLine)-1])
+		e.bufWriter.WriteByte(tabwriter.Escape)
+		e.bufWriter.WriteByte('\n')
+		e.curLine = e.curLine[:0]
 		return nil
 	}
 	trimmed := bytes.TrimLeft(e.curLine, "\t")
@@ -1632,7 +1692,7 @@ func (e *extraIndenter) WriteByte(b byte) error {
 	return nil
 }
 
-// writeEscapingTabs writes a line, wrapping any tab outside an existing
+// writeEscapingTabs writes a line, wrapping literal HT/VT/FF outside an existing
 // escape sequence in [tabwriter.Escape] so that the tabwriter treats it as
 // literal content rather than a column separator turned into spaces.
 func (e *extraIndenter) writeEscapingTabs(line []byte) {
@@ -1641,10 +1701,10 @@ func (e *extraIndenter) writeEscapingTabs(line []byte) {
 		switch b {
 		case tabwriter.Escape:
 			escaped = !escaped
-		case '\t':
+		case '\t', '\v', '\f':
 			if !escaped {
 				e.bufWriter.WriteByte(tabwriter.Escape)
-				e.bufWriter.WriteByte('\t')
+				e.bufWriter.WriteByte(b)
 				e.bufWriter.WriteByte(tabwriter.Escape)
 				continue
 			}

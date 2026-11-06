@@ -238,15 +238,32 @@ func (p *Parser) nextKeepSpaces() {
 	}
 }
 
+// next advances past comments without consuming one native stack frame per
+// comment. Each nextToken step retains the original token and reader behavior.
 func (p *Parser) next() {
+	comments := false
+	for p.nextToken() {
+		comments = true
+	}
+	// The recursive implementation normalized errors when each comment frame
+	// returned, even if the terminal step took an early return. One identical
+	// assignment preserves that behavior without retaining those frames.
+	if comments && p.err != nil {
+		p.tok = _EOF
+	}
+}
+
+// nextToken reports whether it consumed a comment instead of producing the
+// next token. Lexer state stays on Parser; no local value survives a comment.
+func (p *Parser) nextToken() bool {
 	if p.r == runeEOF {
 		p.tok = _EOF
-		return
+		return false
 	}
 	p.spaced = false
 	if p.quote&allKeepSpaces != 0 {
 		p.nextKeepSpaces()
-		return
+		return false
 	}
 	r := p.r
 	for r == escNewl {
@@ -257,7 +274,7 @@ skipSpace:
 		switch r {
 		case runeEOF:
 			p.tok = _EOF
-			return
+			return false
 		case escNewl:
 			r = p.rune()
 		case ' ', '\t', '\r':
@@ -274,7 +291,7 @@ skipSpace:
 			if p.quote != hdocWord && len(p.heredocs) > p.buriedHdocs {
 				p.doHeredocs()
 			}
-			return
+			return false
 		default:
 			break skipSpace
 		}
@@ -288,7 +305,7 @@ skipSpace:
 			p.r = runeEOF
 			p.w = 1
 			p.tok = _EOF
-			return
+			return false
 		}
 	}
 	p.pos = p.nextPos()
@@ -298,7 +315,7 @@ skipSpace:
 		case ';', '"', '\'', '(', ')', '$', '|', '&', '>', '<', '`':
 			if r == '<' && p.lang.in(LangZsh) && p.zshNumRange() {
 				p.advanceLitNone(r)
-				return
+				return false
 			}
 			p.tok = p.regToken(r)
 		case '#':
@@ -307,7 +324,7 @@ skipSpace:
 			// The same applies inside [[ ]] tests, where '#' has no comment meaning.
 			if !p.spaced && (p.quote == unquotedWordCont || p.quote == testExpr) {
 				p.advanceLitNone(r)
-				return
+				return false
 			}
 			r = p.rune()
 			p.newLit(r)
@@ -334,7 +351,7 @@ skipSpace:
 			} else {
 				p.litBs = nil
 			}
-			p.next()
+			return true
 		case '[':
 			// `[` only starts an `[idx]=val` element when it begins a new word;
 			// otherwise it continues a glob like `foo[0-9]`.
@@ -415,6 +432,7 @@ skipSpace:
 	if p.err != nil {
 		p.tok = _EOF
 	}
+	return false
 }
 
 // extendedGlob determines whether we're parsing a Bash extended globbing expression.
