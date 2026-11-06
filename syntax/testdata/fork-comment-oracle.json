@@ -1,0 +1,1452 @@
+[
+  {
+    "Name": "initial-1-comments-False",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "790de60956d09eb1885af8ed9e4c91acf5a7b4ae0ea83701d9786cc2587b751b",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-1-comments-True",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "0d2804d218d5200d6e18a3b74d801ddf0e6d0effd0748910b1fcdb67ad4822fb",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-2-comments-False",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "790de60956d09eb1885af8ed9e4c91acf5a7b4ae0ea83701d9786cc2587b751b",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-2-comments-True",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "0d2804d218d5200d6e18a3b74d801ddf0e6d0effd0748910b1fcdb67ad4822fb",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-4-comments-False",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "790de60956d09eb1885af8ed9e4c91acf5a7b4ae0ea83701d9786cc2587b751b",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-4-comments-True",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "0d2804d218d5200d6e18a3b74d801ddf0e6d0effd0748910b1fcdb67ad4822fb",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-8-comments-False",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "790de60956d09eb1885af8ed9e4c91acf5a7b4ae0ea83701d9786cc2587b751b",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-8-comments-True",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "0d2804d218d5200d6e18a3b74d801ddf0e6d0effd0748910b1fcdb67ad4822fb",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-16-comments-False",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "790de60956d09eb1885af8ed9e4c91acf5a7b4ae0ea83701d9786cc2587b751b",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "initial-16-comments-True",
+    "Source": "# one\n# two\n:\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "0d2804d218d5200d6e18a3b74d801ddf0e6d0effd0748910b1fcdb67ad4822fb",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-1-comments-False",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "1664e929e2ba5cc3c7e0dc00ce56a3dc8c49d242442417720965824d29cbef4d",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-1-comments-True",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "dec34c8f5fd0c3bb6ce84ba94a81fa868f0a166a6d77718379a2f961838c8ae8",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-2-comments-False",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "1664e929e2ba5cc3c7e0dc00ce56a3dc8c49d242442417720965824d29cbef4d",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-2-comments-True",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "dec34c8f5fd0c3bb6ce84ba94a81fa868f0a166a6d77718379a2f961838c8ae8",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-4-comments-False",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "1664e929e2ba5cc3c7e0dc00ce56a3dc8c49d242442417720965824d29cbef4d",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-4-comments-True",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "dec34c8f5fd0c3bb6ce84ba94a81fa868f0a166a6d77718379a2f961838c8ae8",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-8-comments-False",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "1664e929e2ba5cc3c7e0dc00ce56a3dc8c49d242442417720965824d29cbef4d",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-8-comments-True",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "dec34c8f5fd0c3bb6ce84ba94a81fa868f0a166a6d77718379a2f961838c8ae8",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-16-comments-False",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "1664e929e2ba5cc3c7e0dc00ce56a3dc8c49d242442417720965824d29cbef4d",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "inline-16-comments-True",
+    "Source": "echo x # trailing\n# next\necho y\n# last",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "dec34c8f5fd0c3bb6ce84ba94a81fa868f0a166a6d77718379a2f961838c8ae8",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-1-comments-False",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a55f2255b9538f915c216bad064fa0ef5b11eb7b95686a408cd35bca1b2b3e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-1-comments-True",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "91692190a3f6cece6612507981505e1652642072a01510d1fda9039dcca35e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-2-comments-False",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a55f2255b9538f915c216bad064fa0ef5b11eb7b95686a408cd35bca1b2b3e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-2-comments-True",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "91692190a3f6cece6612507981505e1652642072a01510d1fda9039dcca35e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-4-comments-False",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a55f2255b9538f915c216bad064fa0ef5b11eb7b95686a408cd35bca1b2b3e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-4-comments-True",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "91692190a3f6cece6612507981505e1652642072a01510d1fda9039dcca35e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-8-comments-False",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a55f2255b9538f915c216bad064fa0ef5b11eb7b95686a408cd35bca1b2b3e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-8-comments-True",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "91692190a3f6cece6612507981505e1652642072a01510d1fda9039dcca35e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-16-comments-False",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a55f2255b9538f915c216bad064fa0ef5b11eb7b95686a408cd35bca1b2b3e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "blank-crlf-16-comments-True",
+    "Source": "# 🎉 é\r\n \t\r\n# 中\r\n:\r\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "91692190a3f6cece6612507981505e1652642072a01510d1fda9039dcca35e50",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-1-comments-False",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "e32b4ea537d0b24d11fc30a751a971ed0799c09af4b533f78bc3ca87f82d5590",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-1-comments-True",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "8209272e8cd576effb697d74f396da13897ccd769e53c976ac0358f503e725ab",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-2-comments-False",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "e32b4ea537d0b24d11fc30a751a971ed0799c09af4b533f78bc3ca87f82d5590",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-2-comments-True",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "8209272e8cd576effb697d74f396da13897ccd769e53c976ac0358f503e725ab",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-4-comments-False",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "e32b4ea537d0b24d11fc30a751a971ed0799c09af4b533f78bc3ca87f82d5590",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-4-comments-True",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "8209272e8cd576effb697d74f396da13897ccd769e53c976ac0358f503e725ab",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-8-comments-False",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "e32b4ea537d0b24d11fc30a751a971ed0799c09af4b533f78bc3ca87f82d5590",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-8-comments-True",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "8209272e8cd576effb697d74f396da13897ccd769e53c976ac0358f503e725ab",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-16-comments-False",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "e32b4ea537d0b24d11fc30a751a971ed0799c09af4b533f78bc3ca87f82d5590",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "hash-words-16-comments-True",
+    "Source": "# c\nprintf '%s' '#text' \"#text\" ${x#p} # end\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "8209272e8cd576effb697d74f396da13897ccd769e53c976ac0358f503e725ab",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-1-comments-False",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4b9d5307c9bb1a8a6a866de73c5eca5f09c81e51528a82eb68495886ea335813",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-1-comments-True",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "c0f21fd071448bb4532af290205dbff3447f6e59f323490840b454e957ec1cce",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-2-comments-False",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4b9d5307c9bb1a8a6a866de73c5eca5f09c81e51528a82eb68495886ea335813",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-2-comments-True",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "c0f21fd071448bb4532af290205dbff3447f6e59f323490840b454e957ec1cce",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-4-comments-False",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4b9d5307c9bb1a8a6a866de73c5eca5f09c81e51528a82eb68495886ea335813",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-4-comments-True",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "c0f21fd071448bb4532af290205dbff3447f6e59f323490840b454e957ec1cce",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-8-comments-False",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4b9d5307c9bb1a8a6a866de73c5eca5f09c81e51528a82eb68495886ea335813",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-8-comments-True",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "c0f21fd071448bb4532af290205dbff3447f6e59f323490840b454e957ec1cce",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-16-comments-False",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4b9d5307c9bb1a8a6a866de73c5eca5f09c81e51528a82eb68495886ea335813",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "queued-heredocs-16-comments-True",
+    "Source": "# first\ncat \u003c\u003cA \u003c\u003c'B'\n# data\nA\n# data2\nB\n# after\n:\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "c0f21fd071448bb4532af290205dbff3447f6e59f323490840b454e957ec1cce",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-1-comments-False",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "98595aba405477c38e7eafb67cc432b52ae36e67b3abbab327e7aa898b4e69f7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-1-comments-True",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a8093ca8982c0df835e14489d7a47ade931801ebf3829177769c5e5d729ff349",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-2-comments-False",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "98595aba405477c38e7eafb67cc432b52ae36e67b3abbab327e7aa898b4e69f7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-2-comments-True",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a8093ca8982c0df835e14489d7a47ade931801ebf3829177769c5e5d729ff349",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-4-comments-False",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "98595aba405477c38e7eafb67cc432b52ae36e67b3abbab327e7aa898b4e69f7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-4-comments-True",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a8093ca8982c0df835e14489d7a47ade931801ebf3829177769c5e5d729ff349",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-8-comments-False",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "98595aba405477c38e7eafb67cc432b52ae36e67b3abbab327e7aa898b4e69f7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-8-comments-True",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a8093ca8982c0df835e14489d7a47ade931801ebf3829177769c5e5d729ff349",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-16-comments-False",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "98595aba405477c38e7eafb67cc432b52ae36e67b3abbab327e7aa898b4e69f7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "reentrant-heredoc-16-comments-True",
+    "Source": "# first\ncat \u003c\u003cEOF\n$(# sub\n echo hi)\nEOF\n# after\n:\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a8093ca8982c0df835e14489d7a47ade931801ebf3829177769c5e5d729ff349",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-1-comments-False",
+    "Source": "# a\n# b\necho )",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-1-comments-True",
+    "Source": "# a\n# b\necho )",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-2-comments-False",
+    "Source": "# a\n# b\necho )",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-2-comments-True",
+    "Source": "# a\n# b\necho )",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-4-comments-False",
+    "Source": "# a\n# b\necho )",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-4-comments-True",
+    "Source": "# a\n# b\necho )",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-8-comments-False",
+    "Source": "# a\n# b\necho )",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-8-comments-True",
+    "Source": "# a\n# b\necho )",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-16-comments-False",
+    "Source": "# a\n# b\necho )",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "malformed-16-comments-True",
+    "Source": "# a\n# b\necho )",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "4ad62e1a003f772bd1b4662f0104e8a6e279aa9c29474956c942972e1260ce0c",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-1-comments-False",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-1-comments-True",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-2-comments-False",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-2-comments-True",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-4-comments-False",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-4-comments-True",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-8-comments-False",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-8-comments-True",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-16-comments-False",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "unclosed-quote-16-comments-True",
+    "Source": "# a\n# b\necho \"oops",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "07a3b12bf4ce45ea79d910dd879d838b564eb8d47cfd04f9f37f943e54d67c36",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-1-comments-False",
+    "Source": "# a\n# b\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-1-comments-True",
+    "Source": "# a\n# b\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-2-comments-False",
+    "Source": "# a\n# b\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-2-comments-True",
+    "Source": "# a\n# b\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-4-comments-False",
+    "Source": "# a\n# b\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-4-comments-True",
+    "Source": "# a\n# b\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-8-comments-False",
+    "Source": "# a\n# b\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-8-comments-True",
+    "Source": "# a\n# b\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-16-comments-False",
+    "Source": "# a\n# b\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "comment-eof-16-comments-True",
+    "Source": "# a\n# b\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "stop-at-1-comments-False",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "be1f6a02202206ea22a62009b9ca40d77fd26db551c9eeb397558f994ff09a63",
+    "ChunkSHA256": {
+      "1024": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4095": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4096": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "7": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567"
+    }
+  },
+  {
+    "Name": "stop-at-1-comments-True",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "52bcb8aa23eec6762c5f61aae1a2b37d8fd3dc238b22fdd730302a5f91df177c",
+    "ChunkSHA256": {
+      "1024": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4095": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4096": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "7": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0"
+    }
+  },
+  {
+    "Name": "stop-at-2-comments-False",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "be1f6a02202206ea22a62009b9ca40d77fd26db551c9eeb397558f994ff09a63",
+    "ChunkSHA256": {
+      "1024": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4095": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4096": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "7": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567"
+    }
+  },
+  {
+    "Name": "stop-at-2-comments-True",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "52bcb8aa23eec6762c5f61aae1a2b37d8fd3dc238b22fdd730302a5f91df177c",
+    "ChunkSHA256": {
+      "1024": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4095": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4096": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "7": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0"
+    }
+  },
+  {
+    "Name": "stop-at-4-comments-False",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "be1f6a02202206ea22a62009b9ca40d77fd26db551c9eeb397558f994ff09a63",
+    "ChunkSHA256": {
+      "1024": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4095": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4096": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "7": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567"
+    }
+  },
+  {
+    "Name": "stop-at-4-comments-True",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "52bcb8aa23eec6762c5f61aae1a2b37d8fd3dc238b22fdd730302a5f91df177c",
+    "ChunkSHA256": {
+      "1024": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4095": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4096": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "7": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0"
+    }
+  },
+  {
+    "Name": "stop-at-8-comments-False",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "be1f6a02202206ea22a62009b9ca40d77fd26db551c9eeb397558f994ff09a63",
+    "ChunkSHA256": {
+      "1024": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4095": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4096": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "7": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567"
+    }
+  },
+  {
+    "Name": "stop-at-8-comments-True",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "52bcb8aa23eec6762c5f61aae1a2b37d8fd3dc238b22fdd730302a5f91df177c",
+    "ChunkSHA256": {
+      "1024": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4095": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4096": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "7": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0"
+    }
+  },
+  {
+    "Name": "stop-at-16-comments-False",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "be1f6a02202206ea22a62009b9ca40d77fd26db551c9eeb397558f994ff09a63",
+    "ChunkSHA256": {
+      "1024": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4095": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "4096": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567",
+      "7": "54a1aaf33b30978072ecc0ad58f33ce745d54c7b6b8b30e8f410a5e688551567"
+    }
+  },
+  {
+    "Name": "stop-at-16-comments-True",
+    "Source": "# a\n# b\nSTOP tail",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "STOP",
+    "Fault": false,
+    "SHA256": "52bcb8aa23eec6762c5f61aae1a2b37d8fd3dc238b22fdd730302a5f91df177c",
+    "ChunkSHA256": {
+      "1024": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4095": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "4096": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0",
+      "7": "906be8712133109b4970d18559820397e76f77ef332b50ea5a3ac4ab118e96f0"
+    }
+  },
+  {
+    "Name": "fault-comment-1-comments-False",
+    "Source": "# comment",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "82e5658cbeaecd0eab748dd67bc1e8522dcff881bfda894144069bb9ca0795c7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-1-comments-True",
+    "Source": "# comment",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "fbfafa01a350348b2f49824a83557deecb7756e93f3100578cb828720e018f27",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-2-comments-False",
+    "Source": "# comment",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "82e5658cbeaecd0eab748dd67bc1e8522dcff881bfda894144069bb9ca0795c7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-2-comments-True",
+    "Source": "# comment",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "fbfafa01a350348b2f49824a83557deecb7756e93f3100578cb828720e018f27",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-4-comments-False",
+    "Source": "# comment",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "82e5658cbeaecd0eab748dd67bc1e8522dcff881bfda894144069bb9ca0795c7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-4-comments-True",
+    "Source": "# comment",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "fbfafa01a350348b2f49824a83557deecb7756e93f3100578cb828720e018f27",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-8-comments-False",
+    "Source": "# comment",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "82e5658cbeaecd0eab748dd67bc1e8522dcff881bfda894144069bb9ca0795c7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-8-comments-True",
+    "Source": "# comment",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "fbfafa01a350348b2f49824a83557deecb7756e93f3100578cb828720e018f27",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-16-comments-False",
+    "Source": "# comment",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "82e5658cbeaecd0eab748dd67bc1e8522dcff881bfda894144069bb9ca0795c7",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-comment-16-comments-True",
+    "Source": "# comment",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "fbfafa01a350348b2f49824a83557deecb7756e93f3100578cb828720e018f27",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-1-comments-False",
+    "Source": "echo x # comment\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "7fddb61c2b41ab58ba54d773f9e903acf4247dc5328f0997062658749b882c93",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-1-comments-True",
+    "Source": "echo x # comment\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "63128a8168083e000ef34dd076abb52b625b746032495a3a45c0c1b123b2b6b6",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-2-comments-False",
+    "Source": "echo x # comment\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "7fddb61c2b41ab58ba54d773f9e903acf4247dc5328f0997062658749b882c93",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-2-comments-True",
+    "Source": "echo x # comment\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "63128a8168083e000ef34dd076abb52b625b746032495a3a45c0c1b123b2b6b6",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-4-comments-False",
+    "Source": "echo x # comment\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "7fddb61c2b41ab58ba54d773f9e903acf4247dc5328f0997062658749b882c93",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-4-comments-True",
+    "Source": "echo x # comment\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "63128a8168083e000ef34dd076abb52b625b746032495a3a45c0c1b123b2b6b6",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-8-comments-False",
+    "Source": "echo x # comment\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "7fddb61c2b41ab58ba54d773f9e903acf4247dc5328f0997062658749b882c93",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-8-comments-True",
+    "Source": "echo x # comment\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "63128a8168083e000ef34dd076abb52b625b746032495a3a45c0c1b123b2b6b6",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-16-comments-False",
+    "Source": "echo x # comment\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "7fddb61c2b41ab58ba54d773f9e903acf4247dc5328f0997062658749b882c93",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-newline-16-comments-True",
+    "Source": "echo x # comment\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "63128a8168083e000ef34dd076abb52b625b746032495a3a45c0c1b123b2b6b6",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-1-comments-False",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "d94818c76df03a8bbb53d7da72d530500ad92334d6991dc8595ebe3ddc12db55",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-1-comments-True",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "07b5db9bdfb669e1bda7aaf6985e1d63bc45889afca0174bfa2338040184ac8e",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-2-comments-False",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "d94818c76df03a8bbb53d7da72d530500ad92334d6991dc8595ebe3ddc12db55",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-2-comments-True",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "07b5db9bdfb669e1bda7aaf6985e1d63bc45889afca0174bfa2338040184ac8e",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-4-comments-False",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "d94818c76df03a8bbb53d7da72d530500ad92334d6991dc8595ebe3ddc12db55",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-4-comments-True",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "07b5db9bdfb669e1bda7aaf6985e1d63bc45889afca0174bfa2338040184ac8e",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-8-comments-False",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "d94818c76df03a8bbb53d7da72d530500ad92334d6991dc8595ebe3ddc12db55",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-8-comments-True",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "07b5db9bdfb669e1bda7aaf6985e1d63bc45889afca0174bfa2338040184ac8e",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-16-comments-False",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "d94818c76df03a8bbb53d7da72d530500ad92334d6991dc8595ebe3ddc12db55",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "fault-heredoc-16-comments-True",
+    "Source": "cat \u003c\u003cEOF\n# body\nEOF\n# end\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": true,
+    "SHA256": "07b5db9bdfb669e1bda7aaf6985e1d63bc45889afca0174bfa2338040184ac8e",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-1-comments-False",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 1,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a7ba65ec6c1444cd1c8d6b8e0f774f6f2a60fb2e6d73b8c79a3719bf3a213fcc",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-1-comments-True",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 1,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "58b05a7b03cef2c1452f26bd4388c8a11447a580e540d2eb6895a6bec6a82339",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-2-comments-False",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 2,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a7ba65ec6c1444cd1c8d6b8e0f774f6f2a60fb2e6d73b8c79a3719bf3a213fcc",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-2-comments-True",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 2,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "58b05a7b03cef2c1452f26bd4388c8a11447a580e540d2eb6895a6bec6a82339",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-4-comments-False",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 4,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a7ba65ec6c1444cd1c8d6b8e0f774f6f2a60fb2e6d73b8c79a3719bf3a213fcc",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-4-comments-True",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 4,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "58b05a7b03cef2c1452f26bd4388c8a11447a580e540d2eb6895a6bec6a82339",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-8-comments-False",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 8,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a7ba65ec6c1444cd1c8d6b8e0f774f6f2a60fb2e6d73b8c79a3719bf3a213fcc",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-8-comments-True",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 8,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "58b05a7b03cef2c1452f26bd4388c8a11447a580e540d2eb6895a6bec6a82339",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-16-comments-False",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 16,
+    "KeepComments": false,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "a7ba65ec6c1444cd1c8d6b8e0f774f6f2a60fb2e6d73b8c79a3719bf3a213fcc",
+    "ChunkSHA256": {}
+  },
+  {
+    "Name": "backtick-comments-16-comments-True",
+    "Source": "# a\necho `# inside\n echo x` # end\n",
+    "Variant": 16,
+    "KeepComments": true,
+    "StopAt": "",
+    "Fault": false,
+    "SHA256": "58b05a7b03cef2c1452f26bd4388c8a11447a580e540d2eb6895a6bec6a82339",
+    "ChunkSHA256": {}
+  }
+]
