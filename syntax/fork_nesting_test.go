@@ -31,6 +31,8 @@ func TestParseNestingLimit(t *testing.T) {
 		{"TestNot", func(n int) string { return "[[ " + nest(n, "! ", "x", "") + " ]]" }},
 		{"TestAndChain", func(n int) string { return "[[ " + nest(n, "x && ", "x", "") + " ]]" }},
 	}
+	// Flat chains are built by loops and are not nesting, so they are not limited.
+	flat := map[string]bool{"AndChain": true, "Pipeline": true, "ArithmChain": true}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if runtime.GOOS == "js" && strings.HasPrefix(test.name, "Arithm") {
@@ -44,6 +46,10 @@ func TestParseNestingLimit(t *testing.T) {
 			_, err := p.Parse(strings.NewReader(test.in(1000)), "")
 			qt.Assert(t, qt.IsNil(err))
 			_, err = p.Parse(strings.NewReader(test.in(10_001)), "")
+			if flat[test.name] {
+				qt.Assert(t, qt.IsNil(err))
+				return
+			}
 			qt.Assert(t, qt.ErrorMatches(err, `.*: nesting is deeper than 10000 levels`))
 		})
 	}

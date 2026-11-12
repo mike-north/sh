@@ -273,9 +273,10 @@ func (p *Parser) nextArithOp(compact bool) {
 	}
 }
 
-// arithmExprBinary is used for all left-associative binary operators
+// arithmExprBinary is used for all left-associative binary operators.
+// Each operator nests the syntax tree one level deeper along X, but every
+// operand is parsed at the same depth, so a long chain is not nesting work.
 func (p *Parser) arithmExprBinary(compact bool, nextOp func(bool) ArithmExpr, operators ...BinAritOperator) ArithmExpr {
-	openNodes := p.openNodes
 	value := nextOp(compact)
 	for {
 		var foundOp BinAritOperator
@@ -287,15 +288,12 @@ func (p *Parser) arithmExprBinary(compact bool, nextOp func(bool) ArithmExpr, op
 		}
 
 		if token(foundOp) == illegalTok || (compact && p.spaced) {
-			p.openNodes = openNodes
 			return value
 		}
 
 		if value == nil {
 			p.curErr("%#q must follow an expression", p.tok)
 		}
-		// Each operator in a chain nests the syntax tree one level deeper.
-		p.enterNode()
 
 		pos := p.pos
 		p.nextArithOp(compact)

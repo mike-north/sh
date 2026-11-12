@@ -25,12 +25,8 @@ func Walk(node Node, f func(Node) bool) {
 		walkComments(node.Last, f)
 	case *Comment:
 	case *Stmt:
-		for _, c := range node.Comments {
-			if !node.End().After(c.Pos()) {
-				defer Walk(&c, f)
-				break
-			}
-			Walk(&c, f)
+		if c := walkStmtComments(node, f); c != nil {
+			defer Walk(c, f)
 		}
 		if node.Cmd != nil {
 			Walk(node.Cmd, f)
@@ -78,8 +74,7 @@ func Walk(node Node, f func(Node) bool) {
 		walkNilable(node.Cond, f)
 		walkNilable(node.Post, f)
 	case *BinaryCmd:
-		Walk(node.X, f)
-		Walk(node.Y, f)
+		walkBinaryCmd(node, f)
 	case *FuncDecl:
 		walkNilable(node.Name, f)
 		walkList(node.Names, f)
@@ -114,8 +109,7 @@ func Walk(node Node, f func(Node) bool) {
 	case *ArithmCmd:
 		Walk(node.X, f)
 	case *BinaryArithm:
-		Walk(node.X, f)
-		Walk(node.Y, f)
+		walkBinaryArithm(node, f)
 	case *BinaryTest:
 		Walk(node.X, f)
 		Walk(node.Y, f)
@@ -201,6 +195,93 @@ func Preorder(node Node) iter.Seq[Node] {
 			}
 			return ok
 		})
+	}
+}
+
+// walkStmtComments walks the comments of a statement that come before its end,
+// and returns the first one that does not; that one is walked after f(nil).
+func walkStmtComments(s *Stmt, f func(Node) bool) *Comment {
+	for _, c := range s.Comments {
+		if !s.End().After(c.Pos()) {
+			return &c
+		}
+		Walk(&c, f)
+	}
+	return nil
+}
+
+// walkBinaryCmd walks the children of a list or pipeline after f(node). The
+// list is a left spine of statements holding BinaryCmd nodes. Rather than
+// recursing once per operator, it follows the spine with a loop, then finishes
+// each level on the way back up, calling f in the same order as recursion.
+func walkBinaryCmd(node *BinaryCmd, f func(Node) bool) {
+	type level struct {
+		stmt     *Stmt // the statement holding cmd; nil for node
+		cmd      *BinaryCmd
+		trailing *Comment // from walkStmtComments
+	}
+	levels := []level{{cmd: node}}
+	for {
+		x := levels[len(levels)-1].cmd.X
+		var cmd *BinaryCmd
+		if x != nil {
+			cmd, _ = x.Cmd.(*BinaryCmd)
+		}
+		if cmd == nil {
+			Walk(x, f)
+			break
+		}
+		if !f(x) {
+			break
+		}
+		trailing := walkStmtComments(x, f)
+		if !f(cmd) {
+			walkStmtEnd(x, trailing, f)
+			break
+		}
+		levels = append(levels, level{stmt: x, cmd: cmd, trailing: trailing})
+	}
+	for i := len(levels) - 1; i >= 0; i-- {
+		l := levels[i]
+		Walk(l.cmd.Y, f)
+		if l.stmt != nil {
+			f(nil) // leaving l.cmd
+			walkStmtEnd(l.stmt, l.trailing, f)
+		}
+	}
+}
+
+// walkStmtEnd finishes walking a statement whose command has been walked.
+func walkStmtEnd(s *Stmt, trailing *Comment, f func(Node) bool) {
+	walkList(s.Redirs, f)
+	f(nil)
+	if trailing != nil {
+		Walk(trailing, f)
+	}
+}
+
+// walkBinaryArithm walks the children of a binary arithmetic expression after
+// f(node), following the X spine of a left-associative chain like 1+2+3 with a
+// loop and calling f in the same order as recursion.
+func walkBinaryArithm(node *BinaryArithm, f func(Node) bool) {
+	spine := []*BinaryArithm{node}
+	for {
+		x := spine[len(spine)-1].X
+		bx, ok := x.(*BinaryArithm)
+		if !ok || bx == nil {
+			Walk(x, f)
+			break
+		}
+		if !f(bx) {
+			break
+		}
+		spine = append(spine, bx)
+	}
+	for i := len(spine) - 1; i >= 0; i-- {
+		Walk(spine[i].Y, f)
+		if i > 0 {
+			f(nil) // leaving spine[i]
+		}
 	}
 }
 
