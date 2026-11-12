@@ -795,7 +795,18 @@ type BinaryArithm struct {
 	X, Y  ArithmExpr
 }
 
-func (b *BinaryArithm) Pos() Pos { return b.X.Pos() }
+func (b *BinaryArithm) Pos() Pos {
+	// Left-associative chains like 1+2+3 nest along X; follow them with a loop
+	// so that a long chain does not recurse once per operator.
+	x := b.X
+	for {
+		bx, ok := x.(*BinaryArithm)
+		if !ok {
+			return x.Pos()
+		}
+		x = bx.X
+	}
+}
 func (b *BinaryArithm) End() Pos { return b.Y.End() }
 
 // UnaryArithm represents an unary arithmetic expression. The unary operator

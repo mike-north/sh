@@ -29,16 +29,16 @@ func TestForkBudgetRefusalRecoveryAndReuse(t *testing.T) {
 	}
 }
 
-// Work includes iterative operator construction, not just recursion. Zero selects
+// Work counts parser recursion; flat operator chains are free. Zero selects
 // the upstream default; syntax errors encountered first retain their precedence.
 func TestForkBudgetBoundaryAndGrammarPrecedence(t *testing.T) {
-	for _, operators := range []int{125, 126} {
-		source := "echo $(( " + strings.Repeat("1+", operators) + "1 ))"
+	for _, parens := range []int{125, 126} {
+		source := "echo $(( " + strings.Repeat("(", parens) + "1" + strings.Repeat(")", parens) + " ))"
 		_, err := syntax.NewParser(syntax.ParseNestingLimit(128)).Parse(strings.NewReader(source), "")
-		if operators == 125 && err != nil {
+		if parens == 125 && err != nil {
 			t.Fatalf("128 units refused: %v", err)
 		}
-		if operators == 126 {
+		if parens == 126 {
 			if _, ok := err.(syntax.ParseDepthError); !ok {
 				t.Fatalf("129 units not refused: %v", err)
 			}

@@ -944,18 +944,33 @@ func (p *Printer) arithmExprRecurse(expr ArithmExpr, compact, spacePlusMinus boo
 	case *Word:
 		p.word(expr)
 	case *BinaryArithm:
-		if compact {
-			p.arithmExprRecurse(expr.X, compact, spacePlusMinus)
-			p.w.WriteString(expr.Op.String())
-			p.arithmExprRecurse(expr.Y, compact, false)
-		} else {
-			p.arithmExprRecurse(expr.X, compact, spacePlusMinus)
-			if expr.Op != Comma {
-				p.space()
+		// Left-associative chains like 1+2+3 nest along X. Print the leftmost
+		// operand, then each operator and Y outwards, without recursing once
+		// per operator.
+		spine := []*BinaryArithm{expr}
+		x := expr.X
+		for {
+			bx, ok := x.(*BinaryArithm)
+			if !ok {
+				break
 			}
-			p.w.WriteString(expr.Op.String())
-			p.space()
-			p.arithmExprRecurse(expr.Y, compact, false)
+			spine = append(spine, bx)
+			x = bx.X
+		}
+		p.arithmExprRecurse(x, compact, spacePlusMinus)
+		for i := len(spine) - 1; i >= 0; i-- {
+			expr := spine[i]
+			if compact {
+				p.w.WriteString(expr.Op.String())
+				p.arithmExprRecurse(expr.Y, compact, false)
+			} else {
+				if expr.Op != Comma {
+					p.space()
+				}
+				p.w.WriteString(expr.Op.String())
+				p.space()
+				p.arithmExprRecurse(expr.Y, compact, false)
+			}
 		}
 	case *UnaryArithm:
 		if expr.Post {
@@ -1149,14 +1164,46 @@ func (p *Printer) elemJoin(elems []*ArrayElem, last []Comment) {
 }
 
 func (p *Printer) stmt(s *Stmt) {
-	p.wroteSemi = false
-	if s.Negated {
-		p.spacedString("!", s.Pos())
+	// A list or pipeline is a left spine of statements holding BinaryCmd
+	// nodes. Print the start of each spine statement on the way down, and the
+	// rest of its BinaryCmd and statement on the way back up: the same order as
+	// recursing through X, without one call per operator.
+	var spine []*Stmt
+	for {
+		cmd, ok := s.Cmd.(*BinaryCmd)
+		if !ok {
+			break
+		}
+		p.stmtStart(s)
+		// What command prints before a BinaryCmd's X.
+		p.advanceLine(cmd.Pos().Line())
+		p.spacePad(cmd.Pos())
+		spine = append(spine, s)
+		s = cmd.X
 	}
+	p.stmtStart(s)
 	var startRedirs int
 	if s.Cmd != nil {
 		startRedirs = p.command(s.Cmd, s.Redirs)
 	}
+	p.stmtEnd(s, startRedirs)
+	for i := len(spine) - 1; i >= 0; i-- {
+		p.binaryCmdRest(spine[i].Cmd.(*BinaryCmd))
+		p.stmtEnd(spine[i], 0)
+	}
+}
+
+// stmtStart prints what precedes a statement's command.
+func (p *Printer) stmtStart(s *Stmt) {
+	p.wroteSemi = false
+	if s.Negated {
+		p.spacedString("!", s.Pos())
+	}
+}
+
+// stmtEnd prints the redirects from startRedirs onwards and the terminator of
+// a statement whose command has been printed.
+func (p *Printer) stmtEnd(s *Stmt, startRedirs int) {
 	p.incLevel()
 	for _, r := range s.Redirs[startRedirs:] {
 		if p.wantsNewline(r.OpPos, true) {
@@ -1298,44 +1345,7 @@ func (p *Printer) command(cmd Command, redirs []*Redirect) (startRedirs int) {
 		p.semiRsrv("done", cmd.DonePos)
 	case *BinaryCmd:
 		p.stmt(cmd.X)
-		if p.minify || p.singleLine || cmd.Y.Pos().Line() <= p.line {
-			// leave p.nestedBinary untouched
-			p.spacedToken(cmd.Op.String(), cmd.OpPos)
-			p.advanceLine(cmd.Y.Pos().Line())
-			p.stmt(cmd.Y)
-			break
-		}
-		indent := !p.nestedBinary
-		if indent {
-			p.incLevel()
-		}
-		if p.binNextLine {
-			if len(p.pendingHdocs) == 0 {
-				p.bslashNewl()
-			}
-			p.spacedToken(cmd.Op.String(), cmd.OpPos)
-			if len(cmd.Y.Comments) > 0 {
-				p.wantSpace = spaceNotRequired
-				p.newline(cmd.Y.Pos())
-				p.indent()
-				p.comments(cmd.Y.Comments...)
-				p.newline(Pos{})
-				p.indent()
-			}
-		} else {
-			p.spacedToken(cmd.Op.String(), cmd.OpPos)
-			p.advanceLine(cmd.OpPos.Line())
-			p.comments(cmd.Y.Comments...)
-			p.newline(Pos{})
-			p.indent()
-		}
-		p.advanceLine(cmd.Y.Pos().Line())
-		_, p.nestedBinary = cmd.Y.Cmd.(*BinaryCmd)
-		p.stmt(cmd.Y)
-		if indent {
-			p.decLevel()
-		}
-		p.nestedBinary = false
+		p.binaryCmdRest(cmd)
 	case *FuncDecl:
 		if cmd.RsrvWord {
 			p.spacedString("function", Pos{})
@@ -1462,6 +1472,48 @@ func (p *Printer) command(cmd Command, redirs []*Redirect) (startRedirs int) {
 		panic(fmt.Sprintf("syntax.Printer: unexpected node type %T", cmd))
 	}
 	return startRedirs
+}
+
+// binaryCmdRest prints the operator and Y of a BinaryCmd whose X has been printed.
+func (p *Printer) binaryCmdRest(cmd *BinaryCmd) {
+	if p.minify || p.singleLine || cmd.Y.Pos().Line() <= p.line {
+		// leave p.nestedBinary untouched
+		p.spacedToken(cmd.Op.String(), cmd.OpPos)
+		p.advanceLine(cmd.Y.Pos().Line())
+		p.stmt(cmd.Y)
+		return
+	}
+	indent := !p.nestedBinary
+	if indent {
+		p.incLevel()
+	}
+	if p.binNextLine {
+		if len(p.pendingHdocs) == 0 {
+			p.bslashNewl()
+		}
+		p.spacedToken(cmd.Op.String(), cmd.OpPos)
+		if len(cmd.Y.Comments) > 0 {
+			p.wantSpace = spaceNotRequired
+			p.newline(cmd.Y.Pos())
+			p.indent()
+			p.comments(cmd.Y.Comments...)
+			p.newline(Pos{})
+			p.indent()
+		}
+	} else {
+		p.spacedToken(cmd.Op.String(), cmd.OpPos)
+		p.advanceLine(cmd.OpPos.Line())
+		p.comments(cmd.Y.Comments...)
+		p.newline(Pos{})
+		p.indent()
+	}
+	p.advanceLine(cmd.Y.Pos().Line())
+	_, p.nestedBinary = cmd.Y.Cmd.(*BinaryCmd)
+	p.stmt(cmd.Y)
+	if indent {
+		p.decLevel()
+	}
+	p.nestedBinary = false
 }
 
 func (p *Printer) ifClause(ic *IfClause, elif bool) {
@@ -1739,17 +1791,21 @@ func (e *extraIndenter) Write(b []byte) (int, error) {
 }
 
 func startsWithLparen(node Node) bool {
-	switch node := node.(type) {
-	case *Stmt:
-		return startsWithLparen(node.Cmd)
-	case *BinaryCmd:
-		return startsWithLparen(node.X)
-	case *Subshell:
-		return true // keep ( (
-	case *ArithmCmd:
-		return true // keep ( ((
+	// Loop rather than recurse down the left spine of a long list.
+	for {
+		switch n := node.(type) {
+		case *Stmt:
+			node = n.Cmd
+		case *BinaryCmd:
+			node = n.X
+		case *Subshell:
+			return true // keep ( (
+		case *ArithmCmd:
+			return true // keep ( ((
+		default:
+			return false
+		}
 	}
-	return false
 }
 
 func endsWithRparen(node Node) bool {

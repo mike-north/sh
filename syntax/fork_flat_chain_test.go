@@ -149,17 +149,11 @@ func countChainNodes(root Node) (binary, elements int) {
 	return binary, elements
 }
 
-// The current accounting charges one unit per chain operator, so a long flat
-// chain is refused under an embedding limit, and && / || lists and arithmetic
-// chains are refused under the default limit too.
+// Chain operators cost no nesting units, so a long flat chain parses under an
+// embedding limit and under the default limit, and prints and positions
+// correctly.
 func TestForkFlatChainsParse(t *testing.T) {
 	t.Parallel()
-	refusedByDefault := map[string]bool{
-		"AndList": true, "OrList": true, "Mixed": false, "CaseItemPipeline": true,
-		"MultiLineAndList": true, "BinaryNextLineAndList": true,
-		"ArithmAdd": true, "ArithmSub": true, "ArithmMul": true,
-		"ArithmShl": true, "ArithmAnd": true,
-	}
 	for _, test := range flatChains(flatChainLinks) {
 		for _, limit := range []struct {
 			name  string
@@ -169,16 +163,6 @@ func TestForkFlatChainsParse(t *testing.T) {
 				t.Parallel()
 				p := NewParser(KeepComments(true), ParseNestingLimit(limit.units))
 				f, err := p.Parse(strings.NewReader(test.src), "")
-				if limit.units == 128 {
-					var depthErr ParseDepthError
-					qt.Assert(t, qt.ErrorAs(err, &depthErr))
-					qt.Assert(t, qt.Equals(depthErr, ParseDepthError{MaxDepth: 128, Depth: 129}))
-					return
-				}
-				if refusedByDefault[test.name] {
-					qt.Assert(t, qt.ErrorMatches(err, `.*: nesting is deeper than 10000 levels`))
-					return
-				}
 				qt.Assert(t, qt.IsNil(err))
 
 				var sb strings.Builder
@@ -224,8 +208,7 @@ func nestN(k int, open, mid, close string) string {
 }
 
 // Nesting inside the last element of a long chain is counted from the chain's
-// own depth. Today the chain's operators alone exceed the limit, so the nested
-// element is never reached.
+// own depth, so it is refused at the same boundary as without the chain.
 func TestForkFlatChainElementNesting(t *testing.T) {
 	t.Parallel()
 	cmdSubst := func(k int) string { return "echo " + nestN(k, "$(", ":", ")") + "\n" }
@@ -273,8 +256,7 @@ func TestForkFlatChainElementNesting(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			assertDepthBoundary(t, test.standalone, test.last)
-			var depthErr ParseDepthError
-			qt.Assert(t, qt.ErrorAs(parseWithLimit128(test.chained(0)), &depthErr))
+			assertDepthBoundary(t, test.chained, test.last)
 		})
 	}
 }
@@ -401,8 +383,7 @@ func TestForkFlatChainCallDepth(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Short and long chains share one goroutine, so their depths compare.
 			shallow, deep := test.depth(t, small), test.depth(t, large)
-			// Each link currently adds at least one frame.
-			qt.Assert(t, qt.IsTrue(deep > shallow+depthSlack), qt.Commentf("depth %d for %d links, %d for %d", shallow, small, deep, large))
+			qt.Assert(t, qt.IsTrue(deep <= shallow+depthSlack), qt.Commentf("depth %d for %d links, %d for %d", shallow, small, deep, large))
 		})
 	}
 }

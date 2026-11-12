@@ -530,6 +530,9 @@ type Parser struct {
 	// A non-zero number means that we require certain tokens or words before
 	// reaching EOF, used for [Parser.Incomplete].
 	// It is also the nesting work limited by the upstream or binding policy.
+	// It counts parser recursion, not the height of the syntax tree: the
+	// elements of a flat list, pipeline, or left-associative arithmetic chain
+	// are siblings, each counted from the depth of the chain itself.
 	openNodes int
 	// parseDepthLimit selects binding policy without changing per-input state.
 	// Zero retains maxNesting; reset clears openNodes but preserves this option.
@@ -573,6 +576,11 @@ const bufSize = 1 << 10
 // maxNesting is how deeply statements, words, and expressions may be nested,
 // so that a small input cannot overflow the Go stack when recursively parsing
 // or walking the syntax tree. Bash fails at a few thousand nested subshells.
+//
+// Operator chains such as "a && b && c", "a | b | c" and "1 + 2 + 3" are not
+// nesting. They are parsed by loops into left-deep [BinaryCmd] or
+// [BinaryArithm] trees, which the printer, [Walk], and [BinaryArithm.Pos]
+// also follow with loops, so their length is not limited here.
 const maxNesting = 10_000
 
 // enterNode increments [Parser.openNodes], enforcing the selected nesting limit.
@@ -2146,7 +2154,11 @@ func (p *Parser) doRedirect(s *Stmt) {
 
 func (p *Parser) getStmt(readEnd, binCmd, fnBody bool) *Stmt {
 	defer func(n int) { p.openNodes = n }(p.openNodes)
-	p.enterNode()
+	if !binCmd {
+		// A list element is not charged separately from the list's statement;
+		// see the loop below.
+		p.enterNode()
+	}
 	pos, ok := p.gotRsrv("!")
 	s := &Stmt{Position: pos}
 	if ok {
@@ -2168,8 +2180,9 @@ func (p *Parser) getStmt(readEnd, binCmd, fnBody bool) *Stmt {
 			// right recursion should only read a single element
 			return s
 		}
-		// Each operator in a chain nests the syntax tree one level deeper.
-		p.enterNode()
+		// Each operator nests the syntax tree one level deeper, but the parser
+		// does not recurse: every element is parsed at the depth of the list
+		// statement, so a long list costs no more than its deepest element.
 		b := &BinaryCmd{
 			OpPos: p.pos,
 			Op:    BinCmdOperator(p.tok),
@@ -2373,7 +2386,6 @@ func (p *Parser) gotStmtPipe(s *Stmt, binCmd bool) *Stmt {
 		p.doRedirect(s)
 	}
 	// instead of using recursion, iterate manually
-	defer func(n int) { p.openNodes = n }(p.openNodes)
 	for p.tok == or || p.tok == orAnd {
 		if binCmd {
 			// left associativity: in a list of BinaryCmds, the
@@ -2385,8 +2397,8 @@ func (p *Parser) gotStmtPipe(s *Stmt, binCmd bool) *Stmt {
 			// we parse |& as two tokens.
 			break
 		}
-		// Each operator in a chain nests the syntax tree one level deeper.
-		p.enterNode()
+		// As with lists in getStmt, every element of a pipeline is parsed
+		// at the depth of the pipeline itself.
 		b := &BinaryCmd{OpPos: p.pos, Op: BinCmdOperator(p.tok), X: s}
 		p.next()
 		p.got(_Newl)
@@ -3072,6 +3084,10 @@ func (e ParseDepthError) Error() string {
 
 // ParseNestingLimit selects a binding node-nesting budget without changing shell
 // grammar. Zero retains the official default; configuration survives parser reuse.
+// A unit is one level of parser recursion into a statement, word, or expression.
+// The operators of a flat "&&" / "||" list, a "|" / "|&" pipeline, or a
+// left-associative arithmetic chain cost no units, so such a chain costs as
+// much as its most deeply nested element.
 // Negative limits panic, like other invalid parser options. The typed resource
 // failure uses ordinary terminal error propagation in every parser entrypoint;
 // Parse additionally omits its partial File when returning that failure.
