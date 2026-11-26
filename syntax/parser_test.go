@@ -75,6 +75,21 @@ func TestQuotedCarriageReturnsBeforeNewline(t *testing.T) {
 	}
 }
 
+func TestQuotedHeredocLFOpeningAndCRLFDelimiter(t *testing.T) {
+	t.Parallel()
+	const src = "cat <<'EOF'\nbar\\\r\nEOF\r\n"
+	f, err := NewParser().Parse(strings.NewReader(src), "")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+	r := f.Stmts[0].Redirs[0]
+	qt.Check(t, qt.IsFalse(r.ClosePos.IsValid()))
+	qt.Assert(t, qt.IsNotNil(r.Hdoc))
+	qt.Check(t, qt.Equals(r.Hdoc.Lit(), "bar\\\r\nEOF\r\n"))
+	var out strings.Builder
+	qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+	qt.Check(t, qt.Equals(out.String(), src+"EOF\n"))
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
