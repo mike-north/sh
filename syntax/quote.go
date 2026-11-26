@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -179,10 +180,14 @@ func isHex(r rune) bool {
 		(r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
-// appendANSIQuoted appends the value of a $'...' fragment using Bash escapes.
+var (
+	errHeredocInvalidUnicode = errors.New("invalid Unicode escape in heredoc delimiter")
+	errHeredocLocaleUnicode  = errors.New("locale-dependent Unicode escape in heredoc delimiter")
+)
+
+// appendANSIQuoted appends the value of a $'...' delimiter fragment using Bash escapes.
 // A null byte truncates this fragment, so later word parts can still be added.
-// It returns nil if the escape would produce a non-UTF-8 Unicode encoding.
-func appendANSIQuoted(dst []byte, s string) []byte {
+func appendANSIQuoted(dst []byte, s string) ([]byte, error) {
 	for i := 0; i < len(s); i++ {
 		b := s[i]
 		if b == '\\' && i+1 < len(s) {
@@ -245,17 +250,20 @@ func appendANSIQuoted(dst []byte, s string) []byte {
 				i = end - 1
 				if c == 'u' || c == 'U' {
 					if n == 0 {
-						return dst
+						return dst, nil
 					}
 					if n > math.MaxInt32 {
 						// Bash's UTF-8 encoder discards values above 31 bits.
 						continue
 					}
 					if !utf8.ValidRune(rune(n)) {
-						return nil
+						return nil, errHeredocInvalidUnicode
 					}
-					dst = utf8.AppendRune(dst, rune(n))
-					continue
+					// Bash uses the current locale for non-ASCII Unicode
+					// escapes. Its C locale keeps an escape spelling.
+					if n >= utf8.RuneSelf {
+						return nil, errHeredocLocaleUnicode
+					}
 				}
 				b = byte(n)
 			default:
@@ -268,5 +276,5 @@ func appendANSIQuoted(dst []byte, s string) []byte {
 		}
 		dst = append(dst, b)
 	}
-	return dst
+	return dst, nil
 }

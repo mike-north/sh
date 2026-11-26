@@ -190,6 +190,9 @@ func (p *Printer) Print(w io.Writer, node Node) error {
 	}
 	p.flushHeredocs()
 	p.flushComments()
+	if p.err != nil {
+		return p.err
+	}
 
 	// flush the writers
 	if err := p.w.Flush(); err != nil {
@@ -301,6 +304,7 @@ type Printer struct {
 
 	// pendingHdocs is the list of pending heredocs to write.
 	pendingHdocs []*Redirect
+	err          error
 
 	// used when printing <<- heredocs with tab indentation
 	tabsPrinter *Printer
@@ -319,6 +323,7 @@ func (p *Printer) reset() {
 	p.levelIncs = p.levelIncs[:0]
 	p.nestedBinary = false
 	p.pendingHdocs = p.pendingHdocs[:0]
+	p.err = nil
 }
 
 func (p *Printer) spaces(n uint) {
@@ -547,6 +552,9 @@ func (p *Printer) flushHeredocs() {
 					line: r.Hdoc.Pos().Line(),
 				}
 				p.tabsPrinter.hdocBody(r)
+				if p.err == nil {
+					p.err = p.tabsPrinter.err
+				}
 			}
 			p.indent()
 			p.unquotedWord(r.Word)
@@ -595,7 +603,7 @@ func hasUnclosedHdoc(s *Stmt) bool {
 func (p *Printer) hdocBody(r *Redirect) {
 	parts := r.Hdoc.Parts
 	lit, isLit := parts[0].(*Lit)
-	if _, quoted := unquotedWordBytes(r.Word); quoted && isLit && len(parts) == 1 {
+	if _, quoted, _ := unquotedWordBytes(r.Word); quoted && isLit && len(parts) == 1 {
 		// Backslashes are literal here, so print the body as-is,
 		// as [Printer.wordPart] would escape a trailing backslash.
 		p.writeLit(lit.Value)
@@ -1172,7 +1180,13 @@ func (p *Printer) word(w *Word) {
 // unquotedWord prints a heredoc's closing word,
 // which must match how the parser finds the end of its body.
 func (p *Printer) unquotedWord(w *Word) {
-	stop, _ := unquotedWordBytes(w)
+	stop, _, err := unquotedWordBytes(w)
+	if err != nil {
+		if p.err == nil {
+			p.err = err
+		}
+		return
+	}
 	p.writeLit(string(stop))
 }
 

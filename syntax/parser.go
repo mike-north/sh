@@ -750,21 +750,20 @@ func (p *Parser) postNested(s saveState) {
 	p.quote, p.buriedHdocs = s.quote, s.buriedHdocs
 }
 
-// unquotedWordBytes returns a nil buffer for an unrepresentable Unicode escape.
-func unquotedWordBytes(w *Word) (buf []byte, quoted bool) {
+func unquotedWordBytes(w *Word) (buf []byte, quoted bool, err error) {
 	buf = make([]byte, 0, 4)
 	for _, wp := range w.Parts {
 		var partQuoted bool
-		buf, partQuoted = unquotedWordPart(buf, wp, false)
+		buf, partQuoted, err = unquotedWordPart(buf, wp, false)
 		quoted = quoted || partQuoted
-		if buf == nil {
+		if err != nil {
 			break
 		}
 	}
-	return buf, quoted
+	return buf, quoted, err
 }
 
-func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bool) {
+func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bool, err error) {
 	switch wp := wp.(type) {
 	case *Lit:
 		for i := 0; i < len(wp.Value); i++ {
@@ -781,21 +780,21 @@ func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bo
 		}
 	case *SglQuoted:
 		if wp.Dollar {
-			buf = appendANSIQuoted(buf, wp.Value)
+			buf, err = appendANSIQuoted(buf, wp.Value)
 		} else {
 			buf = append(buf, wp.Value...)
 		}
 		quoted = true
 	case *DblQuoted:
 		for _, wp2 := range wp.Parts {
-			buf, _ = unquotedWordPart(buf, wp2, true)
-			if buf == nil {
+			buf, _, err = unquotedWordPart(buf, wp2, true)
+			if err != nil {
 				break
 			}
 		}
 		quoted = true
 	}
-	return buf, quoted
+	return buf, quoted, err
 }
 
 func (p *Parser) doHeredocs() {
@@ -816,9 +815,9 @@ func (p *Parser) doHeredocs() {
 		if r.Op == DashHdoc {
 			p.quote = hdocBodyTabs
 		}
-		stop, quoted := unquotedWordBytes(r.Word)
-		if stop == nil {
-			p.posErr(r.Word.Pos(), "invalid Unicode escape in heredoc delimiter")
+		stop, quoted, err := unquotedWordBytes(r.Word)
+		if err != nil {
+			p.posErr(r.Word.Pos(), "%s", err)
 			break
 		}
 		p.hdocStops = append(p.hdocStops, stop)
@@ -846,7 +845,7 @@ func (p *Parser) unclosedHdoc(r *Redirect) {
 	// Like mksh, reject an unclosed heredoc;
 	// other shells end it at EOF or a closing backquote.
 	if p.lang.in(LangMirBSDKorn) {
-		stop, _ := unquotedWordBytes(r.Word)
+		stop, _, _ := unquotedWordBytes(r.Word)
 		p.posErr(r.Pos(), "unclosed here-document %#q", stop)
 	}
 }

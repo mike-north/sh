@@ -47,7 +47,7 @@ func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
 	}{
 		{`\Uffffffff`, ""},
 		{`E\U80000000ND`, "END"},
-		{`\U0000fffd`, "\uFFFD"},
+		{`\xef\xbf\xbd`, "\uFFFD"},
 	} {
 		t.Run(tc.escaped, func(t *testing.T) {
 			t.Parallel()
@@ -82,7 +82,7 @@ func TestANSIQuotedHeredocDelimiterLocale(t *testing.T) {
 			t.Parallel()
 			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escape, tc.closing)
 			_, err := NewParser().Parse(strings.NewReader(src), "")
-			qt.Check(t, qt.IsNil(err))
+			qt.Check(t, qt.ErrorMatches(err, `.*locale-dependent Unicode escape in heredoc delimiter`))
 		})
 	}
 	t.Run("constructed AST", func(t *testing.T) {
@@ -92,8 +92,7 @@ func TestANSIQuotedHeredocDelimiterLocale(t *testing.T) {
 		r := f.Stmts[0].Redirs[0]
 		r.Word.Parts[0] = &SglQuoted{Dollar: true, Value: `\u00e9`}
 		var out strings.Builder
-		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
-		qt.Check(t, qt.IsTrue(strings.HasSuffix(out.String(), "é\n")))
+		qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), `.*locale-dependent Unicode escape in heredoc delimiter`))
 	})
 }
 
@@ -6369,7 +6368,7 @@ func (c sanityChecker) visit(node Node) bool {
 			}
 			c.checkPos(node, r.OpPos, strs...)
 			if r.ClosePos.IsValid() {
-				stop, _ := unquotedWordBytes(r.Word)
+				stop, _, _ := unquotedWordBytes(r.Word)
 				c.checkPos(node, r.ClosePos, string(stop))
 			}
 		}
