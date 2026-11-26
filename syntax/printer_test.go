@@ -18,13 +18,13 @@ import (
 func TestPrintLiteralVerticalTabAndFormFeed(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name, src, want string
+		name, src string
 	}{
-		{"single quotes", "printf '%s' 'a\vb\fc'\n", "printf '%s' 'a b\nc'\n"},
-		{"double quotes", "printf '%s' \"a\vb\fc\"\n", "printf '%s' \"a b\nc\"\n"},
-		{"quoted heredoc", "cat <<'EOF'\na\vb\fc\nEOF\n", "cat <<'EOF'\na b\nc\nEOF\n"},
-		{"tab-stripping heredoc", "cat <<-'EOF'\n\ta\vb\fc\nEOF\n", "cat <<-'EOF'\n\ta b\nc\nEOF\n"},
-		{"quoted delimiter", "cat <<'E\vF\f'\nbody\nE\vF\f\n", "cat <<'E F\n'\nbody\nE F\n\n"},
+		{"single quotes", "printf '%s' 'a\vb\fc'\n"},
+		{"double quotes", "printf '%s' \"a\vb\fc\"\n"},
+		{"quoted heredoc", "cat <<'EOF'\na\vb\fc\nEOF\n"},
+		{"tab-stripping heredoc", "cat <<-'EOF'\n\ta\vb\fc\nEOF\n"},
+		{"quoted delimiter", "cat <<'E\vF\f'\nbody\nE\vF\f\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -32,7 +32,7 @@ func TestPrintLiteralVerticalTabAndFormFeed(t *testing.T) {
 			qt.Assert(t, qt.IsNil(err))
 			var out strings.Builder
 			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
-			qt.Check(t, qt.Equals(out.String(), tc.want))
+			qt.Check(t, qt.Equals(out.String(), tc.src))
 		})
 	}
 }

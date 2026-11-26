@@ -423,11 +423,21 @@ func (p *Printer) semiOrNewl(s string, pos Pos) {
 }
 
 func (p *Printer) writeLit(s string) {
-	// When writing to an extraIndenter, it escapes any tabs itself while
-	// reindenting '<<-' heredoc body lines.
-	if _, ok := p.w.(*extraIndenter); !ok && strings.Contains(s, "\t") {
-		p.w.WriteByte(tabwriter.Escape)
-		defer p.w.WriteByte(tabwriter.Escape)
+	// An extraIndenter handles escaping after reindenting <<- heredoc lines.
+	if _, nested := p.w.(*extraIndenter); !nested && strings.ContainsAny(s, "\t\v\f") {
+		if strings.Contains(s, "\t") {
+			p.w.WriteByte(tabwriter.Escape)
+			defer p.w.WriteByte(tabwriter.Escape)
+		} else {
+			// Leave newlines visible for tabwriter's column alignment.
+			for i := strings.IndexAny(s, "\v\f"); i >= 0; i = strings.IndexAny(s, "\v\f") {
+				p.w.WriteString(s[:i])
+				p.w.WriteByte(tabwriter.Escape)
+				p.w.WriteByte(s[i])
+				p.w.WriteByte(tabwriter.Escape)
+				s = s[i+1:]
+			}
+		}
 	}
 	p.w.WriteString(s)
 }
@@ -1855,24 +1865,23 @@ func (e *extraIndenter) WriteByte(b byte) error {
 		e.bufWriter.WriteByte('\t')
 	}
 	e.bufWriter.WriteByte(tabwriter.Escape)
-	e.writeEscapingTabs(trimmed)
+	e.writeEscapingControls(trimmed)
 	e.curLine = e.curLine[:0]
 	return nil
 }
 
-// writeEscapingTabs writes a line, wrapping any tab outside an existing
-// escape sequence in [tabwriter.Escape] so that the tabwriter treats it as
-// literal content rather than a column separator turned into spaces.
-func (e *extraIndenter) writeEscapingTabs(line []byte) {
+// writeEscapingControls wraps tabs and form feeds outside existing escape
+// sequences so tabwriter treats them as literal content.
+func (e *extraIndenter) writeEscapingControls(line []byte) {
 	escaped := false
 	for _, b := range line {
 		switch b {
 		case tabwriter.Escape:
 			escaped = !escaped
-		case '\t':
+		case '\t', '\v', '\f':
 			if !escaped {
 				e.bufWriter.WriteByte(tabwriter.Escape)
-				e.bufWriter.WriteByte('\t')
+				e.bufWriter.WriteByte(b)
 				e.bufWriter.WriteByte(tabwriter.Escape)
 				continue
 			}
