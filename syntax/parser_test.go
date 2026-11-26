@@ -57,9 +57,10 @@ func TestQuotedCarriageReturnsBeforeNewline(t *testing.T) {
 	}{
 		{"single quotes", "printf '%s' 'a\r\nb'\n", "printf '%s' 'a\r\nb'\n", 1},
 		{"double quotes after an expansion", "printf '%s' \"$name\r\nb\"\n", "printf '%s' \"$name\r\nb\"\n", 1},
+		{"quoted parameter default", "printf '%s' \"${name:-a\r\nb}\"\n", "printf '%s' \"${name:-a\r\nb}\"\n", 1},
 		{"backslash before CRLF in double quotes", "printf '%s' \"a\\\r\nb\"\n", "printf '%s' \"a\\\r\nb\"\n", 1},
 		{"quoted heredoc", "cat <<'EOF'\na\r\nb\nEOF\n", "cat <<'EOF'\na\r\nb\nEOF\n", 1},
-		{"delimiter-shaped body line", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", 3},
+		{"delimiter-shaped body line", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", 1},
 		{"CRLF heredoc layout", "cat <<'EOF'\r\na\r\nb\r\nEOF\r\necho after\r\n", "cat <<'EOF'\na\r\nb\r\nEOF\necho after\n", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,7 +70,7 @@ func TestQuotedCarriageReturnsBeforeNewline(t *testing.T) {
 			qt.Check(t, qt.Equals(len(f.Stmts), tc.stmts))
 			var out strings.Builder
 			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
-			qt.Check(t, qt.Equals(out.String(), strings.ReplaceAll(tc.want, "\r\n", "\n")))
+			qt.Check(t, qt.Equals(out.String(), tc.want))
 		})
 	}
 }

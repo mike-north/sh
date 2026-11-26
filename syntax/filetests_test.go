@@ -1761,17 +1761,27 @@ var fileTests = []fileTestCase{
 		}),
 	),
 	fileTest(
-		[]string{
-			"foo <<'EOF'\nbar\\\nEOF",
-			"foo <<'EOF'\nbar\\\r\nEOF",
-			"foo <<'EOF'\nbar\\\r\nEOF\r\n",
-		},
+		[]string{"foo <<'EOF'\nbar\\\nEOF"},
 		langFile(&Stmt{
 			Cmd: litCall("foo"),
 			Redirs: []*Redirect{{
 				Op:   Hdoc,
 				Word: word(sglQuoted("EOF")),
 				Hdoc: litWord("bar\\\n"),
+			}},
+		}),
+	),
+	fileTest(
+		[]string{
+			"foo <<'EOF'\nbar\\\r\nEOF",
+			"foo <<'EOF'\r\nbar\\\r\nEOF\r\n",
+		},
+		langFile(&Stmt{
+			Cmd: litCall("foo"),
+			Redirs: []*Redirect{{
+				Op:   Hdoc,
+				Word: word(sglQuoted("EOF")),
+				Hdoc: litWord("bar\\\r\n"),
 			}},
 		}),
 	),
@@ -2595,8 +2605,12 @@ var fileTests = []fileTestCase{
 		langFile(dblQuoted(lit("foo"), lit("bar"))),
 	),
 	fileTest(
-		[]string{"'foo\\\nbar'", "'foo\\\r\nbar'"},
+		[]string{"'foo\\\nbar'"},
 		langFile(sglQuoted("foo\\\nbar")),
+	),
+	fileTest(
+		[]string{"'foo\\\r\nbar'"},
+		langFile(sglQuoted("foo\\\r\nbar")),
 	),
 	fileTest(
 		[]string{"$({ echo; })", "`{ echo; }`"},
@@ -6214,6 +6228,9 @@ func (c sanityChecker) checkPos(node Node, pos Pos, strs ...string) {
 			gotErr = got
 		}
 		got = strings.ReplaceAll(got, "\x00", "")
+		if strings.HasPrefix(got, want) {
+			return
+		}
 		got = strings.ReplaceAll(got, "\r\n", "\n")
 		if !strings.Contains(want, "\\\n") {
 			// Hack to let "foobar" match the input "foo\\\nbar".

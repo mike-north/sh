@@ -79,6 +79,7 @@ func (p *Parser) rune() rune {
 	// TODO: an escaped "\r\n" has a width of 2,
 	// so the line following it starts at column 2.
 	p.col += int64(p.w)
+	p.crlf = false
 	bquotes := 0
 retry:
 	if p.bsp >= uint(len(p.bs)) && p.fill() == 0 {
@@ -100,6 +101,10 @@ retry:
 			goto retry
 		case '\r':
 			if p.peek() == '\n' { // \r\n turns into \n
+				p.crlf = true
+				if p.litBs != nil && p.litKeepCR {
+					p.litBs = append(p.litBs, '\r')
+				}
 				p.col++
 				goto retry
 			}
@@ -110,6 +115,7 @@ retry:
 				p.w, p.r = 1, escNewl
 				return escNewl
 			} else if p1, p2 := p.peekTwo(); p1 == '\r' && p2 == '\n' { // \\\r\n turns into \\\n
+				p.crlf = true
 				p.col++
 				p.bsp += 2
 				p.w, p.r = 2, escNewl
@@ -203,8 +209,8 @@ readAgain:
 func (p *Parser) nextKeepSpaces() {
 	r := p.r
 	if p.quote != hdocBody && p.quote != hdocBodyTabs {
-		// Heredocs handle escaped newlines in a special way, but others do not.
-		for r == escNewl {
+		// A backslash preceding CRLF is literal in quoted words.
+		for r == escNewl && (!p.crlf || !p.keepQuotedCR()) {
 			r = p.rune()
 		}
 	}
@@ -246,6 +252,10 @@ func (p *Parser) nextKeepSpaces() {
 	if p.err != nil {
 		p.tok = _EOF
 	}
+}
+
+func (p *Parser) keepQuotedCR() bool {
+	return p.quote == dblQuotes || p.paramExpKeepCR && p.quote&(paramExpExp|paramExpRepl) != 0
 }
 
 func (p *Parser) next() {
@@ -984,6 +994,7 @@ func (p *Parser) arithmToken(r rune) token {
 }
 
 func (p *Parser) newLit(r rune) {
+	p.litKeepCR = false
 	switch {
 	case r < utf8.RuneSelf:
 		p.litBs = p.litBuf[:1]
@@ -995,6 +1006,35 @@ func (p *Parser) newLit(r rune) {
 		w := utf8.RuneLen(r)
 		p.litBs = append(p.litBuf[:0], p.bs[p.bsp-uint(w):p.bsp]...)
 	}
+}
+
+func (p *Parser) newQuotedLit(r rune) {
+	p.newLit(r)
+	p.litKeepCR = true
+	if r == '\n' && p.crlf {
+		p.litBs = append(p.litBuf[:0], '\r', '\n')
+	}
+}
+
+func (p *Parser) appendQuotedEscNewl() {
+	p.litBs = append(p.litBs, '\\')
+	if p.crlf {
+		p.litBs = append(p.litBs, '\r')
+	}
+	p.litBs = append(p.litBs, '\n')
+}
+
+// quotedPos includes the first byte of a CRLF sequence in literal data.
+func (p *Parser) quotedPos() Pos {
+	pos := p.nextPos()
+	if p.crlf {
+		col := pos.Col()
+		if col > 0 {
+			col--
+		}
+		return NewPos(pos.Offset()-1, pos.Line(), col)
+	}
+	return pos
 }
 
 func (p *Parser) endLit() (s string) {
@@ -1049,10 +1089,21 @@ func paramNameStartRune[T rune | byte](r T) bool {
 }
 
 func (p *Parser) advanceLitOther(r rune) {
+	keepCR := p.keepQuotedCR()
+	if keepCR {
+		p.pos = p.quotedPos()
+		p.newQuotedLit(r)
+	} else {
+		p.newLit(r)
+	}
 	tok := _LitWord
 loop:
-	for p.newLit(r); r != runeEOF; r = p.rune() {
+	for ; r != runeEOF; r = p.rune() {
 		switch r {
+		case escNewl:
+			if keepCR && p.crlf {
+				p.appendQuotedEscNewl()
+			}
 		case '\\': // escaped byte follows
 			p.rune()
 		case '\'', '"', '`', '$':
@@ -1180,15 +1231,22 @@ loop:
 }
 
 func (p *Parser) advanceLitDquote(r rune) {
+	p.pos = p.quotedPos()
 	tok := _LitWord
 loop:
-	for p.newLit(r); r != runeEOF; r = p.rune() {
+	for p.newQuotedLit(r); r != runeEOF; r = p.rune() {
 		switch r {
 		case '"':
 			break loop
 		case '\\': // escaped byte follows
 			p.rune()
-		case escNewl, '`', '$':
+		case escNewl:
+			if p.crlf {
+				p.appendQuotedEscNewl()
+				continue
+			}
+			fallthrough
+		case '`', '$':
 			tok = _Lit
 			break loop
 		}
@@ -1271,17 +1329,23 @@ func (p *Parser) advanceLitHdoc(r rune) {
 	}
 }
 
-func (p *Parser) quotedHdocWord() *Word {
+func (p *Parser) quotedHdocWord(crlf bool) *Word {
 	r := p.r
-	p.newLit(r)
-	pos := p.nextPos()
+	p.newQuotedLit(r)
+	pos := p.quotedPos()
 	stop := p.hdocStops[len(p.hdocStops)-1]
 	for ; r != runeEOF; r = p.rune() {
 		for p.quote == hdocBodyTabs && r == '\t' {
 			r = p.rune()
 		}
-		lStart := len(p.litBs) - p.w
-		lPos := p.nextPos()
+		lStart := len(p.litBs)
+		if r != escNewl {
+			lStart -= p.w
+			if r == '\n' && p.crlf {
+				lStart--
+			}
+		}
+		lPos := p.quotedPos()
 	runeLoop:
 		for {
 			switch r {
@@ -1292,7 +1356,7 @@ func (p *Parser) quotedHdocWord() *Word {
 					break runeLoop
 				}
 			case escNewl:
-				p.litBs = append(p.litBs, '\\', '\n')
+				p.appendQuotedEscNewl()
 				break runeLoop
 			}
 			r = p.rune()
@@ -1305,7 +1369,9 @@ func (p *Parser) quotedHdocWord() *Word {
 		if r != runeEOF && len(line) > 0 {
 			line = line[:len(line)-1] // minus \n
 		}
-		if bytes.Equal(line, stop) {
+		// A CRLF after the opening word allows a CRLF after the closing
+		// word. With an LF opener, a trailing CR is part of the line data.
+		if bytes.Equal(line, stop) || crlf && p.crlf && bytes.Equal(bytes.TrimSuffix(line, []byte{'\r'}), stop) {
 			p.hdocClosePos = lPos
 			p.hdocStops[len(p.hdocStops)-1] = nil
 			val := p.endLit()[:lStart]

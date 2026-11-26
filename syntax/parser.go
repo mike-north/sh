@@ -489,11 +489,12 @@ func (p *Parser) Arithmetic(r io.Reader) (ArithmExpr, error) {
 // Parser holds the internal state of the parsing mechanism of a
 // program.
 type Parser struct {
-	src io.Reader
-	bs  []byte // current chunk of read bytes
-	bsp uint   // offset within [Parser.bs] for the rune after [Parser.r]
-	r   rune   // next rune; [runeEOF] when it went past EOF, or we stopped
-	w   int    // width of [Parser.r]
+	src  io.Reader
+	bs   []byte // current chunk of read bytes
+	bsp  uint   // offset within [Parser.bs] for the rune after [Parser.r]
+	r    rune   // next rune; [runeEOF] when it went past EOF, or we stopped
+	w    int    // width of [Parser.r]
+	crlf bool   // the current newline, escaped or plain, contained a carriage return
 
 	f *File
 
@@ -511,8 +512,9 @@ type Parser struct {
 
 	pos Pos // position of tok
 
-	quote   quoteState // current lexer state
-	eqlOffs int        // position of '=' in [Parser.val] when [Parser.tok].isLit is true
+	quote          quoteState // current lexer state
+	paramExpKeepCR bool       // words in a double-quoted parameter expansion contain literal CRLF
+	eqlOffs        int        // position of '=' in [Parser.val] when [Parser.tok].isLit is true
 
 	keepComments bool
 	lang         LangVariant
@@ -561,9 +563,10 @@ type Parser struct {
 	litBatch  []Lit
 	wordBatch []wordAlloc
 
-	readBuf [bufSize]byte
-	litBuf  [bufSize]byte
-	litBs   []byte
+	readBuf   [bufSize]byte
+	litBuf    [bufSize]byte
+	litBs     []byte
+	litKeepCR bool // preserve carriage returns in the current literal
 }
 
 // Incomplete reports whether the parser needs more input bytes
@@ -602,9 +605,10 @@ func (p *Parser) reset() {
 	p.eqlOffs = 0
 	p.bs, p.bsp = nil, 0
 	p.offs, p.line, p.col = 0, 1, 1
-	p.r, p.w = 0, 0
+	p.r, p.w, p.crlf = 0, 0, false
 	p.err, p.readErr, p.readEOF = nil, nil, false
 	p.quote, p.forbidNested = noState, false
+	p.paramExpKeepCR = false
 	p.openNodes = 0
 	p.recoveredErrors = 0
 	p.heredocs, p.buriedHdocs = p.heredocs[:0], 0
@@ -615,7 +619,7 @@ func (p *Parser) reset() {
 	p.accComs, p.curComs = nil, &p.accComs
 	p.litBatch = nil
 	p.wordBatch = nil
-	p.litBs = nil
+	p.litBs, p.litKeepCR = nil, false
 }
 
 // nextPos returns the position of the next rune, [Parser.r].
@@ -793,6 +797,7 @@ func (p *Parser) doHeredocs() {
 		// Nothing do do; don't even issue a read.
 		return
 	}
+	crlf := p.crlf
 	p.rune() // consume '\n', since we know p.tok == _Newl
 	old := p.quote
 	p.heredocs = p.heredocs[:p.buriedHdocs]
@@ -810,7 +815,7 @@ func (p *Parser) doHeredocs() {
 			p.rune()
 		}
 		if quoted {
-			r.Hdoc = p.quotedHdocWord()
+			r.Hdoc = p.quotedHdocWord(crlf)
 		} else {
 			p.next()
 			r.Hdoc = p.getWord()
@@ -1344,7 +1349,7 @@ func (p *Parser) wordPart() WordPart {
 	case sglQuote, dollSglQuote:
 		sq := &SglQuoted{Left: p.pos, Dollar: p.tok == dollSglQuote}
 		r := p.r
-		for p.newLit(r); ; r = p.rune() {
+		for p.newQuotedLit(r); ; r = p.rune() {
 			switch r {
 			case '\\':
 				if sq.Dollar {
@@ -1358,7 +1363,7 @@ func (p *Parser) wordPart() WordPart {
 				p.next()
 				return sq
 			case escNewl:
-				p.litBs = append(p.litBs, '\\', '\n')
+				p.appendQuotedEscNewl()
 			case runeEOF:
 				p.tok = _EOF
 				if p.recoverError() {
@@ -1511,6 +1516,11 @@ func (p *Parser) dblQuoted() *DblQuoted {
 // as a literal.
 func (p *Parser) paramExp() *ParamExp {
 	old := p.quote
+	if old != paramExpExp && old != paramExpRepl {
+		keepCR := p.paramExpKeepCR
+		p.paramExpKeepCR = old == dblQuotes
+		defer func() { p.paramExpKeepCR = keepCR }()
+	}
 	p.quote = runeByRune
 	// [ParamExp.Short] means we are parsing $exp rather than ${exp}.
 	pe := &ParamExp{
