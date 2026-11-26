@@ -39,6 +39,25 @@ func TestPartlyQuotedHeredocDelimiter(t *testing.T) {
 	}
 }
 
+func TestMultibytePartlyQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, op, prefix, body, indent string
+	}{
+		{"plain", "<<", "É", "ordinary body\n", ""},
+		{"plain empty", "<<", "É", "", ""},
+		{"tab stripping", "<<-", "🚀", "\tordinary body\n", "\t"},
+		{"tab stripping empty", "<<-", "🚀", "", "\t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat %s'%s'ND\n%s%s%sND\necho after\n", tc.op, tc.prefix, tc.body, tc.indent, tc.prefix)
+			_, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Check(t, qt.ErrorMatches(err, ".*unclosed here-document `"+tc.prefix+"ND`"))
+		})
+	}
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
