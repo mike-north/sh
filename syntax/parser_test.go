@@ -23,6 +23,21 @@ import (
 	"mvdan.cc/sh/v3/internal"
 )
 
+func TestPartlyQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, delim := range []string{`'E'ND`, `"E"ND`} {
+		t.Run(delim, func(t *testing.T) {
+			t.Parallel()
+			f, err := NewParser().Parse(strings.NewReader("cat <<"+delim+"\n$(printf marker)\nEND\n"), "")
+			qt.Assert(t, qt.IsNil(err))
+			parts := f.Stmts[0].Redirs[0].Hdoc.Parts
+			qt.Assert(t, qt.Equals(len(parts), 2))
+			_, ok := parts[0].(*CmdSubst)
+			qt.Check(t, qt.IsTrue(ok))
+		})
+	}
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
