@@ -73,10 +73,10 @@ func TestPartlyQuotedHeredocInBackquotes(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, want string
 	}{
-		{"continued empty line", "\\\n", "\\\n\t"},
-		{"continued body text", "a\\\nb\n", "a\\\nb\n\t"},
+		{"continued empty line", "\\\n", "\t"},
+		{"continued body text", "a\\\nb\n", "ab\n\t"},
 		{"escaped backslash", "a\\\\\nb\n", "a\\\nb\n\t"},
-		{"escaped backslash before continuation", "a\\\\\\\nb\n", "a\\\\\nb\n\t"},
+		{"escaped backslash before continuation", "a\\\\\\\nb\n", "a\\b\n\t"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

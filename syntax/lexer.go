@@ -94,6 +94,15 @@ retry:
 				goto retry
 			}
 		case '\\':
+			// Backquotes remove an unescaped backslash-newline before
+			// parsing their contents, even inside a quoted heredoc.
+			if bquotes < p.openBquotes && p.peek() == '\n' {
+				p.bsp++
+				p.line++
+				p.col = 1
+				bquotes = 0
+				goto retry
+			}
 			if p.r == '\\' {
 			} else if p.peek() == '\n' {
 				p.bsp++
