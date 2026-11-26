@@ -25,15 +25,16 @@ import (
 
 func TestPartlyQuotedHeredocDelimiter(t *testing.T) {
 	t.Parallel()
-	for _, delim := range []string{`'E'ND`, `"E"ND`} {
+	for _, delim := range []string{`'E'ND`, `"E"ND`, `E\ND`} {
 		t.Run(delim, func(t *testing.T) {
 			t.Parallel()
 			f, err := NewParser().Parse(strings.NewReader("cat <<"+delim+"\n$(printf marker)\nEND\n"), "")
 			qt.Assert(t, qt.IsNil(err))
 			parts := f.Stmts[0].Redirs[0].Hdoc.Parts
-			qt.Assert(t, qt.Equals(len(parts), 2))
-			_, ok := parts[0].(*CmdSubst)
-			qt.Check(t, qt.IsTrue(ok))
+			qt.Assert(t, qt.HasLen(parts, 1))
+			lit, ok := parts[0].(*Lit)
+			qt.Assert(t, qt.IsTrue(ok))
+			qt.Check(t, qt.Equals(lit.Value, "$(printf marker)\n"))
 		})
 	}
 }
