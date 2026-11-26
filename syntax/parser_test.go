@@ -23,6 +23,27 @@ import (
 	"mvdan.cc/sh/v3/internal"
 )
 
+func TestHeredocDelimiterAfterExpansion(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, op, indent, suffix string
+	}{
+		{"parameter", "<<", "", "EOF"},
+		{"dash heredoc", "<<-", "\t", "\tEOF"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := "cat " + tc.op + "EOF\n" + tc.indent + "${label}" + tc.suffix + "\nsome body text\n" + tc.indent + "EOF\necho after\n"
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 4))
+			r := f.Stmts[0].Redirs[0]
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(2)))
+			qt.Check(t, qt.Equals(f.Stmts[1].Cmd.(*CallExpr).Args[0].Lit(), "some"))
+		})
+	}
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
