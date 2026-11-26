@@ -40,6 +40,37 @@ func TestANSIQuotedHeredocDelimiter(t *testing.T) {
 	}
 }
 
+func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		escaped, delimiter string
+	}{
+		{`\Uffffffff`, ""},
+		{`E\U80000000ND`, "END"},
+	} {
+		t.Run(tc.escaped, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escaped, tc.delimiter)
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+			qt.Check(t, qt.IsFalse(f.Stmts[0].Redirs[0].ClosePos.IsValid()))
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.IsTrue(strings.Contains(out.String(), "\uFFFD")))
+		})
+	}
+	t.Run("invalid UTF-8", func(t *testing.T) {
+		t.Parallel()
+		const src = "cat <<$'\\U00110000'\nbody\n"
+		f, err := NewParser().Parse(strings.NewReader(src), "")
+		qt.Assert(t, qt.IsNil(err))
+		var out strings.Builder
+		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+		qt.Check(t, qt.IsTrue(strings.Contains(out.String(), "\uFFFD")))
+	})
+}
+
 func lit(s string) *Lit { return &Lit{Value: s} }
 func lits(strs ...string) []*Lit {
 	l := make([]*Lit, 0, len(strs))
