@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.15.0] - 2026-11-26
+
+- **cmd/shfmt**
+  - Report printer errors when formatting a decoded AST with `--from-json`
+- **syntax**
+  - Match heredoc delimiters only on complete lines
+  - Decode ANSI-C escapes in heredoc delimiters and discard Unicode escape values above Bash's 31-bit range
+  - Reject non-ASCII `\u` and `\U` escapes in heredoc delimiters as locale-dependent
+  - Preserve vertical tabs and form feeds when printing quoted words and heredocs
+  - Preserve carriage returns before newlines in quoted words and quoted heredoc bodies
+
 ## [3.14.1] - 2026-09-06
 
 - **syntax**
