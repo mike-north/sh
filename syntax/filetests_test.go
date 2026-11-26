@@ -19,19 +19,23 @@ func TestANSIQuotedHeredocDelimiter(t *testing.T) {
 	}{
 		{"hexadecimal", `$'E\x4eD'`, "END"},
 		{"mixed fragments", `$'\105'N$'\u0044'`, "END"},
-		{"control character", `$'E\c?'`, "E\x7f"},
+		{"control character", `$'E\cG'`, "E\a"},
 		{"null truncates a fragment", `'E'$'N\0discard'D`, "END"},
+		{"unknown escape", `$'E\q'`, `E\q`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			src := fmt.Sprintf("cat <<%s\n$(printf marker)\n%s\nprintf 'after\\n'\n", tc.word, tc.delimiter)
 			f, err := NewParser().Parse(strings.NewReader(src), "")
 			qt.Assert(t, qt.IsNil(err))
-			qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
 			r := f.Stmts[0].Redirs[0]
-			qt.Check(t, qt.IsFalse(r.ClosePos.IsValid()))
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(3)))
 			qt.Assert(t, qt.Equals(len(r.Hdoc.Parts), 1))
-			qt.Check(t, qt.IsTrue(strings.HasSuffix(r.Hdoc.Parts[0].(*Lit).Value, "printf 'after\\n'\n")))
+			qt.Check(t, qt.Equals(r.Hdoc.Parts[0].(*Lit).Value, "$(printf marker)\n"))
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.Equals(out.String(), src))
 		})
 	}
 }

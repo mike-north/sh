@@ -772,7 +772,11 @@ func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bo
 			}
 		}
 	case *SglQuoted:
-		buf = append(buf, []byte(wp.Value)...)
+		if wp.Dollar {
+			buf = appendANSIQuoted(buf, wp.Value)
+		} else {
+			buf = append(buf, wp.Value...)
+		}
 		quoted = true
 	case *DblQuoted:
 		for _, wp2 := range wp.Parts {
