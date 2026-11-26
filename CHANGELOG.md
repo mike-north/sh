@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.14.2] - 2026-11-26
+
+- **syntax**
+  - Keep partly quoted heredoc bodies literal and match delimiters that start with a multibyte character - #1446
+  - Remove backslash-newline continuations in backquotes before parsing heredocs
+
 ## [3.14.1] - 2026-09-06
 
 - **syntax**
