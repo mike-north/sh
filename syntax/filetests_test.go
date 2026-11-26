@@ -47,27 +47,25 @@ func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
 	}{
 		{`\Uffffffff`, ""},
 		{`E\U80000000ND`, "END"},
+		{`\U0000fffd`, "\uFFFD"},
 	} {
 		t.Run(tc.escaped, func(t *testing.T) {
 			t.Parallel()
 			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escaped, tc.delimiter)
 			f, err := NewParser().Parse(strings.NewReader(src), "")
 			qt.Assert(t, qt.IsNil(err))
-			qt.Assert(t, qt.Equals(len(f.Stmts), 1))
-			qt.Check(t, qt.IsFalse(f.Stmts[0].Redirs[0].ClosePos.IsValid()))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			qt.Check(t, qt.Equals(f.Stmts[0].Redirs[0].ClosePos.Line(), uint(3)))
 			var out strings.Builder
 			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
-			qt.Check(t, qt.IsTrue(strings.Contains(out.String(), "\uFFFD")))
+			qt.Check(t, qt.Equals(out.String(), src))
 		})
 	}
 	t.Run("invalid UTF-8", func(t *testing.T) {
 		t.Parallel()
 		const src = "cat <<$'\\U00110000'\nbody\n"
-		f, err := NewParser().Parse(strings.NewReader(src), "")
-		qt.Assert(t, qt.IsNil(err))
-		var out strings.Builder
-		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
-		qt.Check(t, qt.IsTrue(strings.Contains(out.String(), "\uFFFD")))
+		_, err := NewParser().Parse(strings.NewReader(src), "")
+		qt.Check(t, qt.ErrorMatches(err, `.*invalid Unicode escape in heredoc delimiter`))
 	})
 }
 

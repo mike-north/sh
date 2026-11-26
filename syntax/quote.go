@@ -5,6 +5,7 @@ package syntax
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -180,6 +181,7 @@ func isHex(r rune) bool {
 
 // appendANSIQuoted appends the value of a $'...' fragment using Bash escapes.
 // A null byte truncates this fragment, so later word parts can still be added.
+// It returns nil if the escape would produce a non-UTF-8 Unicode encoding.
 func appendANSIQuoted(dst []byte, s string) []byte {
 	for i := 0; i < len(s); i++ {
 		b := s[i]
@@ -244,6 +246,13 @@ func appendANSIQuoted(dst []byte, s string) []byte {
 				if c == 'u' || c == 'U' {
 					if n == 0 {
 						return dst
+					}
+					if n > math.MaxInt32 {
+						// Bash's UTF-8 encoder discards values above 31 bits.
+						continue
+					}
+					if !utf8.ValidRune(rune(n)) {
+						return nil
 					}
 					dst = utf8.AppendRune(dst, rune(n))
 					continue

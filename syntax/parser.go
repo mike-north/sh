@@ -750,12 +750,16 @@ func (p *Parser) postNested(s saveState) {
 	p.quote, p.buriedHdocs = s.quote, s.buriedHdocs
 }
 
+// unquotedWordBytes returns a nil buffer for an unrepresentable Unicode escape.
 func unquotedWordBytes(w *Word) (buf []byte, quoted bool) {
 	buf = make([]byte, 0, 4)
 	for _, wp := range w.Parts {
 		var partQuoted bool
 		buf, partQuoted = unquotedWordPart(buf, wp, false)
 		quoted = quoted || partQuoted
+		if buf == nil {
+			break
+		}
 	}
 	return buf, quoted
 }
@@ -785,6 +789,9 @@ func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bo
 	case *DblQuoted:
 		for _, wp2 := range wp.Parts {
 			buf, _ = unquotedWordPart(buf, wp2, true)
+			if buf == nil {
+				break
+			}
 		}
 		quoted = true
 	}
@@ -810,6 +817,10 @@ func (p *Parser) doHeredocs() {
 			p.quote = hdocBodyTabs
 		}
 		stop, quoted := unquotedWordBytes(r.Word)
+		if stop == nil {
+			p.posErr(r.Word.Pos(), "invalid Unicode escape in heredoc delimiter")
+			break
+		}
 		p.hdocStops = append(p.hdocStops, stop)
 		if i > 0 && p.r == '\n' {
 			p.rune()
