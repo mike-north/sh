@@ -4,10 +4,37 @@
 package syntax
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 )
+
+func TestANSIQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, word, delimiter string
+	}{
+		{"hexadecimal", `$'E\x4eD'`, "END"},
+		{"mixed fragments", `$'\105'N$'\u0044'`, "END"},
+		{"control character", `$'E\c?'`, "E\x7f"},
+		{"null truncates a fragment", `'E'$'N\0discard'D`, "END"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<%s\n$(printf marker)\n%s\nprintf 'after\\n'\n", tc.word, tc.delimiter)
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+			r := f.Stmts[0].Redirs[0]
+			qt.Check(t, qt.IsFalse(r.ClosePos.IsValid()))
+			qt.Assert(t, qt.Equals(len(r.Hdoc.Parts), 1))
+			qt.Check(t, qt.IsTrue(strings.HasSuffix(r.Hdoc.Parts[0].(*Lit).Value, "printf 'after\\n'\n")))
+		})
+	}
+}
 
 func lit(s string) *Lit { return &Lit{Value: s} }
 func lits(strs ...string) []*Lit {
