@@ -68,6 +68,29 @@ func TestMultibytePartlyQuotedHeredocDelimiter(t *testing.T) {
 	}
 }
 
+func TestPartlyQuotedHeredocInBackquotes(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"continued empty line", "\\\n", "\\\n\t"},
+		{"continued body text", "a\\\nb\n", "a\\\nb\n\t"},
+		{"escaped backslash", "a\\\\\nb\n", "a\\\nb\n\t"},
+		{"escaped backslash before continuation", "a\\\\\\\nb\n", "a\\\\\nb\n\t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := "echo `\ncat <<-'E'ND\n" + tc.body + "\tEND\n`\necho after\n"
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			subst := f.Stmts[0].Cmd.(*CallExpr).Args[1].Parts[0].(*CmdSubst)
+			qt.Assert(t, qt.Equals(len(subst.Stmts), 1))
+			qt.Check(t, qt.Equals(subst.Stmts[0].Redirs[0].Hdoc.Lit(), tc.want))
+		})
+	}
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
