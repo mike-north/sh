@@ -1279,7 +1279,7 @@ func (p *Parser) quotedHdocWord() *Word {
 		for p.quote == hdocBodyTabs && r == '\t' {
 			r = p.rune()
 		}
-		lStart := len(p.litBs) - 1
+		lStart := len(p.litBs) - p.w
 	runeLoop:
 		for {
 			switch r {
