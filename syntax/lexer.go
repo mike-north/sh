@@ -1197,13 +1197,11 @@ loop:
 }
 
 func (p *Parser) advanceLitHdoc(r rune) {
-	// Unlike the rest of nextKeepSpaces quote states, we handle escaped
-	// newlines here. If lastTok==_Lit, then we know we're following an
-	// escaped newline, so the first line can't end the heredoc.
-	lastTok := p.tok
+	// A literal can start mid-line after an expansion or an escaped newline.
+	// Only compare complete lines, starting before any tabs stripped by <<-.
+	matchLine := r != escNewl && (p.col == 1 || p.tok == _Newl)
 	for r == escNewl {
 		r = p.rune()
-		lastTok = _Lit
 	}
 	p.pos = p.nextPos()
 
@@ -1234,12 +1232,7 @@ func (p *Parser) advanceLitHdoc(r rune) {
 			}
 			fallthrough
 		case '\n', runeEOF:
-			if lStart == 0 && lastTok == _Lit {
-				// This line starts right after an escaped
-				// newline, so it should never end the heredoc.
-			} else if lStart >= 0 {
-				// TODO: lStart is also 0 when this literal follows an
-				// expansion mid-line, so "${x}EOF" wrongly ends the heredoc.
+			if lStart >= 0 && (matchLine || stop == nil) {
 				// Compare the current line with the stop word.
 				line := p.litBs[lStart:]
 				if r != runeEOF && len(line) > 0 {
@@ -1273,6 +1266,7 @@ func (p *Parser) advanceLitHdoc(r rune) {
 			}
 			lStart = len(p.litBs)
 			atLineStart = true
+			matchLine = true
 		}
 	}
 }

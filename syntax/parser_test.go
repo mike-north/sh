@@ -36,10 +36,15 @@ func TestHeredocDelimiterAfterExpansion(t *testing.T) {
 			src := "cat " + tc.op + "EOF\n" + tc.indent + "${label}" + tc.suffix + "\nsome body text\n" + tc.indent + "EOF\necho after\n"
 			f, err := NewParser().Parse(strings.NewReader(src), "")
 			qt.Assert(t, qt.IsNil(err))
-			qt.Assert(t, qt.Equals(len(f.Stmts), 4))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
 			r := f.Stmts[0].Redirs[0]
-			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(2)))
-			qt.Check(t, qt.Equals(f.Stmts[1].Cmd.(*CallExpr).Args[0].Lit(), "some"))
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(4)))
+			qt.Check(t, qt.Equals(r.ClosePos.Col(), uint(len(tc.indent)+1)))
+			parts := r.Hdoc.Parts
+			qt.Assert(t, qt.HasLen(parts, 2+len(tc.indent)))
+			qt.Check(t, qt.Equals(parts[len(tc.indent)].(*ParamExp).Param.Value, "label"))
+			qt.Check(t, qt.Equals(parts[len(parts)-1].(*Lit).Value, tc.suffix+"\nsome body text\n"+tc.indent))
+			qt.Check(t, qt.Equals(f.Stmts[1].Cmd.(*CallExpr).Args[0].Lit(), "echo"))
 		})
 	}
 }
