@@ -69,6 +69,34 @@ func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
 	})
 }
 
+func TestANSIQuotedHeredocDelimiterLocale(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, escape, closing string
+	}{
+		{"C locale spelling", `\u00e9`, `\u00E9`},
+		{"UTF-8 locale spelling", `\u00e9`, "é"},
+		{"long escape", `\U000000e9`, "é"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escape, tc.closing)
+			_, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Check(t, qt.IsNil(err))
+		})
+	}
+	t.Run("constructed AST", func(t *testing.T) {
+		t.Parallel()
+		f, err := NewParser().Parse(strings.NewReader("cat <<'EOF'\nbody\nEOF\n"), "")
+		qt.Assert(t, qt.IsNil(err))
+		r := f.Stmts[0].Redirs[0]
+		r.Word.Parts[0] = &SglQuoted{Dollar: true, Value: `\u00e9`}
+		var out strings.Builder
+		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+		qt.Check(t, qt.IsTrue(strings.HasSuffix(out.String(), "é\n")))
+	})
+}
+
 func lit(s string) *Lit { return &Lit{Value: s} }
 func lits(strs ...string) []*Lit {
 	l := make([]*Lit, 0, len(strs))

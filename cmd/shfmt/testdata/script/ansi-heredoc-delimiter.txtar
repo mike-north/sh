@@ -1,0 +1,15 @@
+stdin delimiter.json
+exec shfmt --from-json
+stdout '^é$'
+! stderr .
+
+-- delimiter.json --
+{
+	"Type": "File",
+	"Stmts": [{
+		"Redirs": [{
+			"Op": "<<",
+			"Word": {"Parts": [{"Type": "SglQuoted", "Dollar": true, "Value": "\\u00e9"}]}
+		}]
+	}]
+}
