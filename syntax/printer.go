@@ -6,6 +6,7 @@ package syntax
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -214,6 +215,14 @@ type bufWriter interface {
 	Flush() error
 }
 
+type heredocWordWriter struct{ *bufio.Writer }
+
+type pendingHeredoc struct {
+	redirect *Redirect
+	stop     string
+	quoted   bool
+}
+
 type colCounter struct {
 	*bufio.Writer
 	column    int
@@ -303,8 +312,9 @@ type Printer struct {
 	nestedBinary bool
 
 	// pendingHdocs is the list of pending heredocs to write.
-	pendingHdocs []*Redirect
-	err          error
+	pendingHdocs    []pendingHeredoc
+	delimiterParser *Parser
+	err             error
 
 	// used when printing <<- heredocs with tab indentation
 	tabsPrinter *Printer
@@ -429,7 +439,9 @@ func (p *Printer) semiOrNewl(s string, pos Pos) {
 
 func (p *Printer) writeLit(s string) {
 	// An extraIndenter handles escaping after reindenting <<- heredoc lines.
-	if _, nested := p.w.(*extraIndenter); !nested && strings.ContainsAny(s, "\t\v\f") {
+	_, nested := p.w.(*extraIndenter)
+	_, capture := p.w.(*heredocWordWriter)
+	if !nested && !capture && strings.ContainsAny(s, "\t\v\f") {
 		if strings.Contains(s, "\t") {
 			p.w.WriteByte(tabwriter.Escape)
 			defer p.w.WriteByte(tabwriter.Escape)
@@ -445,6 +457,67 @@ func (p *Printer) writeLit(s string) {
 		}
 	}
 	p.w.WriteString(s)
+}
+
+func (p *Printer) heredocWord(r *Redirect) error {
+	if r.Word == nil || len(r.Word.Parts) == 0 {
+		return errors.New("missing heredoc delimiter word")
+	}
+	// Render only word parts that cannot write other commands or heredocs
+	// while the output is being captured.
+	valid := true
+	Walk(r.Word, func(node Node) bool {
+		switch node.(type) {
+		case nil, *Word, *Lit, *SglQuoted, *DblQuoted:
+			return true
+		default:
+			valid = false
+			return false
+		}
+	})
+	if !valid {
+		return errors.New("unsupported word part in heredoc delimiter")
+	}
+
+	continued := !p.singleLine && r.Word.Pos().Line() > p.line
+	if continued {
+		p.bslashNewl()
+	}
+	var opening strings.Builder
+	w := p.w
+	p.w = &heredocWordWriter{bufio.NewWriterSize(&opening, 128)}
+	p.word(r.Word)
+	p.w.Flush()
+	p.w = w
+	text := opening.String()
+	if _, nested := w.(*extraIndenter); nested && strings.ContainsRune(text, '\n') {
+		return errors.New("cannot reindent a multiline heredoc delimiter inside a tab-stripping heredoc")
+	}
+
+	prefix := r.Op.String()
+	separate := !continued && !p.spaceRedirects && r.Op == Hdoc && strings.HasPrefix(text, "-")
+	if continued || p.spaceRedirects || separate {
+		prefix += " "
+	}
+	if p.delimiterParser == nil {
+		p.delimiterParser = NewParser()
+	}
+	stop, quoted, nonASCIIUnicode, err := p.delimiterParser.parsePrintedHeredocDelimiter(prefix, text, r.Op)
+	if err != nil {
+		return err
+	}
+	if nonASCIIUnicode && r.OpPos.IsValid() && !r.ClosePos.IsValid() {
+		// Bash may already have closed the source heredoc on an escape
+		// spelling in another locale. Positionless ASTs can generate one.
+		return errors.New("unclosed heredoc with a non-ASCII Unicode escape")
+	}
+	if separate {
+		p.space()
+	}
+	p.writeLit(text)
+	p.wantSpace = spaceRequired
+	p.pendingHdocs = append(p.pendingHdocs, pendingHeredoc{r, string(stop), quoted})
+	return nil
 }
 
 func (p *Printer) incLevel() {
@@ -524,7 +597,8 @@ func (p *Printer) flushHeredocs() {
 	newLevel := p.level
 	p.level = p.lastLevel
 
-	for _, r := range hdocs {
+	for _, doc := range hdocs {
+		r := doc.redirect
 		p.line++
 		p.w.WriteByte('\n')
 		p.wantSpace = spaceWritten
@@ -551,13 +625,13 @@ func (p *Printer) flushHeredocs() {
 
 					line: r.Hdoc.Pos().Line(),
 				}
-				p.tabsPrinter.hdocBody(r)
+				p.tabsPrinter.hdocBody(r, doc.quoted)
 				if p.err == nil {
 					p.err = p.tabsPrinter.err
 				}
 			}
 			p.indent()
-			p.unquotedWord(r.Word)
+			p.writeLit(doc.stop)
 		} else {
 			w := p.w
 			if e, ok := p.w.(*extraIndenter); ok {
@@ -569,14 +643,12 @@ func (p *Printer) flushHeredocs() {
 				p.w = e.sink()
 			}
 			if r.Hdoc != nil {
-				p.hdocBody(r)
+				p.hdocBody(r, doc.quoted)
 			}
-			p.unquotedWord(r.Word)
+			p.writeLit(doc.stop)
 			p.w = w
 		}
 		if r.Hdoc != nil {
-			// Overwrite p.line, since printing r.Word again can set
-			// p.line to the beginning of the heredoc again.
 			p.advanceLine(r.Hdoc.End().Line())
 		}
 		p.wantSpace = spaceNotRequired
@@ -600,10 +672,10 @@ func hasUnclosedHdoc(s *Stmt) bool {
 
 // hdocBody prints a heredoc's body, ending it with a newline if it lacks one,
 // as the parser ends a heredoc at EOF or a closing backquote.
-func (p *Printer) hdocBody(r *Redirect) {
+func (p *Printer) hdocBody(r *Redirect, quoted bool) {
 	parts := r.Hdoc.Parts
 	lit, isLit := parts[0].(*Lit)
-	if _, quoted, _ := unquotedWordBytes(r.Word); quoted && isLit && len(parts) == 1 {
+	if quoted && isLit && len(parts) == 1 {
 		// Backslashes are literal here, so print the body as-is,
 		// as [Printer.wordPart] would escape a trailing backslash.
 		p.writeLit(lit.Value)
@@ -1177,19 +1249,6 @@ func (p *Printer) word(w *Word) {
 	p.wantSpace = spaceRequired
 }
 
-// unquotedWord prints a heredoc's closing word,
-// which must match how the parser finds the end of its body.
-func (p *Printer) unquotedWord(w *Word) {
-	stop, _, err := unquotedWordBytes(w)
-	if err != nil {
-		if p.err == nil {
-			p.err = err
-		}
-		return
-	}
-	p.writeLit(string(stop))
-}
-
 func (p *Printer) wordJoin(ws []*Word) {
 	anyNewline := false
 	for _, w := range ws {
@@ -1297,9 +1356,12 @@ func (p *Printer) stmt(s *Stmt) {
 		// TODO: a heredoc is flushed at the next newline, even one within
 		// a later redirect's word, as in `cat <<EOF <$(\n\techo\n)`,
 		// placing the heredoc's body inside the command substitution.
-		p.word(r.Word)
 		if r.Op == Hdoc || r.Op == DashHdoc {
-			p.pendingHdocs = append(p.pendingHdocs, r)
+			if p.err == nil {
+				p.err = p.heredocWord(r)
+			}
+		} else {
+			p.word(r.Word)
 		}
 	}
 	sep := s.Semicolon.IsValid() && s.Semicolon.Line() > p.line && !p.singleLine

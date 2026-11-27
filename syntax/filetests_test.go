@@ -689,6 +689,9 @@ func TestUnicodeHeredocDelimiterRoundTrip(t *testing.T) {
 					formatted, parsed := roundTrip(t, NewParser(), f, mode.simplify, mode.minify)
 					qt.Assert(t, qt.Equals(len(parsed.Stmts), 1))
 					got := parsed.Stmts[0].Redirs[0]
+					stop, _, _, err := decodeHeredocDelimiter(got)
+					qt.Assert(t, qt.IsNil(err))
+					qt.Check(t, qt.Equals(string(stop), tc.want))
 					qt.Assert(t, qt.IsTrue(got.ClosePos.IsValid()))
 					qt.Check(t, qt.Equals(formatted[got.ClosePos.Offset():], tc.want+"\n"))
 					qt.Check(t, qt.Equals(strings.TrimPrefix(got.Hdoc.Lit(), "\t"), "body\n"))
@@ -7007,7 +7010,7 @@ func (c sanityChecker) visit(node Node) bool {
 			}
 			c.checkPos(node, r.OpPos, strs...)
 			if r.ClosePos.IsValid() {
-				stop, _, _ := unquotedWordBytes(r.Word)
+				stop, _, _, _ := decodeHeredocDelimiter(r)
 				c.checkPos(node, r.ClosePos, string(stop))
 			}
 		}

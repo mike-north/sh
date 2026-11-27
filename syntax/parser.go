@@ -4,6 +4,8 @@
 package syntax
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -257,6 +259,7 @@ func (p *Parser) Parse(r io.Reader, name string) (*File, error) {
 		// trigger the parsing error.
 		p.doHeredocs()
 	}
+	p.rejectDiscardedCR()
 	return p.f, p.err
 }
 
@@ -289,6 +292,7 @@ func (p *Parser) StmtsSeq(r io.Reader) iter.Seq2[*Stmt, error] {
 			// trigger the parsing error.
 			p.doHeredocs()
 		}
+		p.rejectDiscardedCR()
 		if p.err != nil {
 			// Yield any final error from the parser.
 			yield(nil, p.err)
@@ -560,6 +564,15 @@ type Parser struct {
 	// on a later line when it follows escaped newlines.
 	lineCom Pos
 
+	// Count carriage returns in the input and those retained in literal
+	// nodes, comments, or matched heredoc closers.
+	readCRs, keptCRs  uint64
+	unquotedEscapedCR bool
+	unicodeHeredoc    Node
+	// A bare CR can split a heredoc word in the lexer. Track its
+	// continuation up to a shell word boundary for Unicode detection.
+	crSplitHeredoc bool
+
 	litBatch  []Lit
 	wordBatch []wordAlloc
 
@@ -606,6 +619,9 @@ func (p *Parser) reset() {
 	p.bs, p.bsp = nil, 0
 	p.offs, p.line, p.col = 0, 1, 1
 	p.r, p.w, p.crlf = 0, 0, false
+	p.readCRs, p.keptCRs = 0, 0
+	p.unquotedEscapedCR, p.crSplitHeredoc = false, false
+	p.unicodeHeredoc = nil
 	p.err, p.readErr, p.readEOF = nil, nil, false
 	p.quote, p.forbidNested = noState, false
 	p.paramExpKeepCR = false
@@ -646,7 +662,25 @@ func (p *Parser) lit(pos Pos, val string) *Lit {
 	l.ValuePos = pos
 	l.ValueEnd = p.nextPos()
 	l.Value = val
+	p.keepCRs(val)
 	return l
+}
+
+func (p *Parser) keepCRs(s string) {
+	if p.readCRs != 0 {
+		p.keptCRs += uint64(strings.Count(s, "\r"))
+	}
+}
+
+func (p *Parser) discardedCR() bool {
+	return p.readCRs > p.keptCRs || p.unquotedEscapedCR
+}
+
+func (p *Parser) rejectDiscardedCR() {
+	if p.err == nil && p.unicodeHeredoc != nil && p.discardedCR() {
+		p.posErr(p.unicodeHeredoc.Pos(), "unsupported carriage return in input with a Unicode heredoc delimiter "+
+			"(bare outside quotes or heredoc bodies, or preceded by a backslash outside a CR-preserving literal)")
+	}
 }
 
 type wordAlloc struct {
@@ -750,22 +784,80 @@ func (p *Parser) postNested(s saveState) {
 	p.quote, p.buriedHdocs = s.quote, s.buriedHdocs
 }
 
-func unquotedWordBytes(w *Word) (buf []byte, quoted bool, err error) {
-	buf = make([]byte, 0, 4)
-	for _, wp := range w.Parts {
-		var partQuoted bool
-		buf, partQuoted, err = unquotedWordPart(buf, wp, false)
-		quoted = quoted || partQuoted
-		if err != nil {
-			break
-		}
-	}
-	return buf, quoted, err
+type heredocWordFlags struct {
+	nonASCIIUnicode bool
+	quoteMarker     bool // a byte Bash prefixes with a marker during quote removal
 }
 
-func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bool, err error) {
+// parsePrintedHeredocDelimiter uses the redirect lexer to check that the
+// printed opener contains exactly the expected operator and delimiter word.
+func (p *Parser) parsePrintedHeredocDelimiter(prefix, text string, op RedirOperator) ([]byte, bool, bool, error) {
+	if !utf8.ValidString(text) || strings.ContainsRune(text, '\x00') {
+		return nil, false, false, errors.New("invalid bytes in printed heredoc delimiter")
+	}
+	p.reset()
+	p.f = &File{}
+	p.src = strings.NewReader(prefix + text + "\n")
+	p.rune()
+	p.next()
+	if p.tok != token(op) {
+		return nil, false, false, errors.New("invalid printed heredoc operator")
+	}
+	p.quote, p.forbidNested = hdocWord, true
+	p.next()
+	w := p.getWord()
+	if p.err != nil {
+		return nil, false, false, p.err
+	}
+	if w == nil {
+		return nil, false, false, errors.New("printed heredoc delimiter must be a single word")
+	}
+	stop, quoted, nonASCIIUnicode, err := decodeHeredocDelimiter(&Redirect{Op: op, Word: w})
+	if err != nil {
+		return nil, false, false, err
+	}
+	if nonASCIIUnicode && p.discardedCR() {
+		return nil, false, false, errors.New("carriage return in heredoc delimiter")
+	}
+	end := uint(len(prefix) + len(text))
+	if w.Pos().Offset() != uint(len(prefix)) || w.End().Offset() != end ||
+		p.tok != _Newl || p.nextPos().Offset() != end {
+		return nil, false, false, errors.New("printed heredoc delimiter must be a single word")
+	}
+	return stop, quoted, nonASCIIUnicode, nil
+}
+
+func decodeHeredocDelimiter(r *Redirect) (buf []byte, quoted, nonASCIIUnicode bool, err error) {
+	buf = make([]byte, 0, 4)
+	var flags heredocWordFlags
+	for _, wp := range r.Word.Parts {
+		var partQuoted bool
+		buf, partQuoted, err = unquotedWordPart(buf, wp, false, &flags)
+		quoted = quoted || partQuoted
+		if err != nil {
+			return buf, quoted, flags.nonASCIIUnicode, err
+		}
+	}
+	// Validate after joining the parts, since byte escapes in different parts
+	// can form a single UTF-8 character.
+	switch {
+	case !utf8.Valid(buf):
+		err = errors.New("heredoc delimiter contains invalid UTF-8")
+	case bytes.ContainsRune(buf, '\n'):
+		err = errors.New("heredoc delimiter contains a newline")
+	case quoted && flags.quoteMarker:
+		err = errors.New("heredoc delimiter contains a Bash quoting byte")
+	case r.Op == DashHdoc && len(buf) > 0 && buf[0] == '\t':
+		// Bash tries an exact match before stripping tabs from the line.
+		err = errors.New("heredoc delimiter starts with a tab after <<-")
+	}
+	return buf, quoted, flags.nonASCIIUnicode, err
+}
+
+func unquotedWordPart(buf []byte, wp WordPart, quotes bool, flags *heredocWordFlags) (_ []byte, quoted bool, err error) {
 	switch wp := wp.(type) {
 	case *Lit:
+		escaped := false
 		for i := 0; i < len(wp.Value); i++ {
 			// Within double quotes, only some backslashes are escapes.
 			if b := wp.Value[i]; b == '\\' && (!quotes ||
@@ -774,27 +866,50 @@ func unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bo
 					buf = append(buf, wp.Value[i])
 				}
 				quoted = true
+				escaped = false
 			} else {
+				// Bash marks unprotected control bytes in a quoted word,
+				// including bytes outside the quoted fragments. Inside
+				// double quotes a backslash protects these bytes even
+				// though quote removal keeps the backslash.
+				if !escaped && (b == '\x01' || b == '\x7f') {
+					flags.quoteMarker = true
+				}
+				escaped = b == '\\'
 				buf = append(buf, b)
 			}
 		}
 	case *SglQuoted:
+		start := len(buf)
 		if wp.Dollar {
-			buf, err = appendANSIQuoted(buf, wp.Value)
+			buf, err = appendANSIQuoted(buf, wp.Value, &flags.nonASCIIUnicode)
 		} else {
 			buf = append(buf, wp.Value...)
+		}
+		if err == nil {
+			flags.quoteMarker = flags.quoteMarker || bytes.ContainsAny(buf[start:], "\x01\x7f")
 		}
 		quoted = true
 	case *DblQuoted:
 		for _, wp2 := range wp.Parts {
-			buf, _, err = unquotedWordPart(buf, wp2, true)
+			buf, _, err = unquotedWordPart(buf, wp2, true, flags)
 			if err != nil {
 				break
 			}
 		}
 		quoted = true
+	default:
+		return nil, false, errors.New("unsupported word part in heredoc delimiter")
 	}
 	return buf, quoted, err
+}
+
+func (p *Parser) readHeredocDelimiter(r *Redirect) ([]byte, bool, error) {
+	stop, quoted, nonASCIIUnicode, err := decodeHeredocDelimiter(r)
+	if nonASCIIUnicode && p.unicodeHeredoc == nil {
+		p.unicodeHeredoc = r.Word
+	}
+	return stop, quoted, err
 }
 
 func (p *Parser) doHeredocs() {
@@ -815,7 +930,7 @@ func (p *Parser) doHeredocs() {
 		if r.Op == DashHdoc {
 			p.quote = hdocBodyTabs
 		}
-		stop, quoted, err := unquotedWordBytes(r.Word)
+		stop, quoted, err := p.readHeredocDelimiter(r)
 		if err != nil {
 			p.posErr(r.Word.Pos(), "%s", err)
 			break
@@ -832,6 +947,8 @@ func (p *Parser) doHeredocs() {
 		}
 		if p.hdocStops[len(p.hdocStops)-1] == nil {
 			r.ClosePos = p.hdocClosePos
+			// The formatter regenerates these bytes from the delimiter.
+			p.keptCRs += uint64(bytes.Count(stop, []byte{'\r'}))
 		} else {
 			p.unclosedHdoc(r)
 		}
@@ -842,10 +959,14 @@ func (p *Parser) doHeredocs() {
 
 // unclosedHdoc handles a heredoc which ended without its closing word.
 func (p *Parser) unclosedHdoc(r *Redirect) {
+	// A heredoc ended by a backquote may never reach doHeredocs.
+	if p.unicodeHeredoc != nil && !p.lang.in(LangMirBSDKorn) {
+		return
+	}
+	stop, _, _ := p.readHeredocDelimiter(r)
 	// Like mksh, reject an unclosed heredoc;
 	// other shells end it at EOF or a closing backquote.
 	if p.lang.in(LangMirBSDKorn) {
-		stop, _, _ := unquotedWordBytes(r.Word)
 		p.posErr(r.Pos(), "unclosed here-document %#q", stop)
 	}
 }
@@ -1368,6 +1489,14 @@ func (p *Parser) wordPart() WordPart {
 			case '\'':
 				sq.Right = p.nextPos()
 				sq.Value = p.endLit()
+				p.keepCRs(sq.Value)
+				if sq.Dollar && p.crSplitHeredoc && p.unicodeHeredoc == nil {
+					var nonASCIIUnicode bool
+					_, _ = appendANSIQuoted(nil, sq.Value, &nonASCIIUnicode)
+					if nonASCIIUnicode {
+						p.unicodeHeredoc = sq
+					}
+				}
 
 				p.rune()
 				p.next()
@@ -2169,11 +2298,11 @@ func (p *Parser) doRedirect(s *Stmt) {
 	case AppClob, RdrAllClob, AppAllClob:
 		p.checkLang(p.pos, LangZsh, "%#q redirects", r.Op)
 	}
-	p.next()
 	switch r.Op {
 	case Hdoc, DashHdoc:
 		old := p.quote
 		p.quote, p.forbidNested = hdocWord, true
+		p.next()
 		r.Word = p.followWordTok(token(r.Op), r.OpPos)
 		if r.Word != nil {
 			// Only queue heredocs with a word, unlike a broken "<<" alone.
@@ -2184,10 +2313,11 @@ func (p *Parser) doRedirect(s *Stmt) {
 			p.gotLineCom(s)
 			p.doHeredocs()
 		}
-	case WordHdoc:
-		p.checkLang(r.OpPos, langBashLike|LangMirBSDKorn|LangZsh, "herestrings")
-		fallthrough
 	default:
+		p.next()
+		if r.Op == WordHdoc {
+			p.checkLang(r.OpPos, langBashLike|LangMirBSDKorn|LangZsh, "herestrings")
+		}
 		r.Word = p.followWordTok(token(r.Op), r.OpPos)
 	}
 }
