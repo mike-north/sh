@@ -581,7 +581,9 @@ func formatBytes(src []byte, path string, fileLang syntax.LangVariant) error {
 		return typedjson.EncodeOptions{Indent: "\t"}.Encode(os.Stdout, node)
 	}
 	writeBuf.Reset()
-	printer.Print(&writeBuf, node)
+	if err := printer.Print(&writeBuf, node); err != nil {
+		return err
+	}
 	res := writeBuf.Bytes()
 	if !bytes.Equal(src, res) {
 		switch list.val {

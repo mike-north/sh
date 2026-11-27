@@ -4,10 +4,97 @@
 package syntax
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 )
+
+func TestANSIQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, word, delimiter string
+	}{
+		{"hexadecimal", `$'E\x4eD'`, "END"},
+		{"mixed fragments", `$'\105'N$'\u0044'`, "END"},
+		{"control character", `$'E\cG'`, "E\a"},
+		{"null truncates a fragment", `'E'$'N\0discard'D`, "END"},
+		{"unknown escape", `$'E\q'`, `E\q`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<%s\n$(printf marker)\n%s\nprintf 'after\\n'\n", tc.word, tc.delimiter)
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			r := f.Stmts[0].Redirs[0]
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(3)))
+			qt.Assert(t, qt.Equals(len(r.Hdoc.Parts), 1))
+			qt.Check(t, qt.Equals(r.Hdoc.Parts[0].(*Lit).Value, "$(printf marker)\n"))
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.Equals(out.String(), src))
+		})
+	}
+}
+
+func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		escaped, delimiter string
+	}{
+		{`\Uffffffff`, ""},
+		{`E\U80000000ND`, "END"},
+		{`\xef\xbf\xbd`, "\uFFFD"},
+	} {
+		t.Run(tc.escaped, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escaped, tc.delimiter)
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			qt.Check(t, qt.Equals(f.Stmts[0].Redirs[0].ClosePos.Line(), uint(3)))
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.Equals(out.String(), src))
+		})
+	}
+	t.Run("invalid UTF-8", func(t *testing.T) {
+		t.Parallel()
+		const src = "cat <<$'\\U00110000'\nbody\n"
+		_, err := NewParser().Parse(strings.NewReader(src), "")
+		qt.Check(t, qt.ErrorMatches(err, `.*invalid Unicode escape in heredoc delimiter`))
+	})
+}
+
+func TestANSIQuotedHeredocDelimiterLocale(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, escape, closing string
+	}{
+		{"C locale spelling", `\u00e9`, `\u00E9`},
+		{"UTF-8 locale spelling", `\u00e9`, "é"},
+		{"long escape", `\U000000e9`, "é"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escape, tc.closing)
+			_, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Check(t, qt.ErrorMatches(err, `.*locale-dependent Unicode escape in heredoc delimiter`))
+		})
+	}
+	t.Run("constructed AST", func(t *testing.T) {
+		t.Parallel()
+		f, err := NewParser().Parse(strings.NewReader("cat <<'EOF'\nbody\nEOF\n"), "")
+		qt.Assert(t, qt.IsNil(err))
+		r := f.Stmts[0].Redirs[0]
+		r.Word.Parts[0] = &SglQuoted{Dollar: true, Value: `\u00e9`}
+		var out strings.Builder
+		qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), `.*locale-dependent Unicode escape in heredoc delimiter`))
+	})
+}
 
 func lit(s string) *Lit { return &Lit{Value: s} }
 func lits(strs ...string) []*Lit {
@@ -1730,17 +1817,27 @@ var fileTests = []fileTestCase{
 		}),
 	),
 	fileTest(
-		[]string{
-			"foo <<'EOF'\nbar\\\nEOF",
-			"foo <<'EOF'\nbar\\\r\nEOF",
-			"foo <<'EOF'\nbar\\\r\nEOF\r\n",
-		},
+		[]string{"foo <<'EOF'\nbar\\\nEOF"},
 		langFile(&Stmt{
 			Cmd: litCall("foo"),
 			Redirs: []*Redirect{{
 				Op:   Hdoc,
 				Word: word(sglQuoted("EOF")),
 				Hdoc: litWord("bar\\\n"),
+			}},
+		}),
+	),
+	fileTest(
+		[]string{
+			"foo <<'EOF'\nbar\\\r\nEOF",
+			"foo <<'EOF'\r\nbar\\\r\nEOF\r\n",
+		},
+		langFile(&Stmt{
+			Cmd: litCall("foo"),
+			Redirs: []*Redirect{{
+				Op:   Hdoc,
+				Word: word(sglQuoted("EOF")),
+				Hdoc: litWord("bar\\\r\n"),
 			}},
 		}),
 	),
@@ -2564,8 +2661,12 @@ var fileTests = []fileTestCase{
 		langFile(dblQuoted(lit("foo"), lit("bar"))),
 	),
 	fileTest(
-		[]string{"'foo\\\nbar'", "'foo\\\r\nbar'"},
+		[]string{"'foo\\\nbar'"},
 		langFile(sglQuoted("foo\\\nbar")),
+	),
+	fileTest(
+		[]string{"'foo\\\r\nbar'"},
+		langFile(sglQuoted("foo\\\r\nbar")),
 	),
 	fileTest(
 		[]string{"$({ echo; })", "`{ echo; }`"},
@@ -6183,6 +6284,9 @@ func (c sanityChecker) checkPos(node Node, pos Pos, strs ...string) {
 			gotErr = got
 		}
 		got = strings.ReplaceAll(got, "\x00", "")
+		if strings.HasPrefix(got, want) {
+			return
+		}
 		got = strings.ReplaceAll(got, "\r\n", "\n")
 		if !strings.Contains(want, "\\\n") {
 			// Hack to let "foobar" match the input "foo\\\nbar".
@@ -6264,7 +6368,7 @@ func (c sanityChecker) visit(node Node) bool {
 			}
 			c.checkPos(node, r.OpPos, strs...)
 			if r.ClosePos.IsValid() {
-				stop, _ := unquotedWordBytes(r.Word)
+				stop, _, _ := unquotedWordBytes(r.Word)
 				c.checkPos(node, r.ClosePos, string(stop))
 			}
 		}

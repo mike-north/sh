@@ -4,7 +4,10 @@
 package syntax
 
 import (
+	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -175,4 +178,103 @@ func Quote(s string, lang LangVariant) (string, error) {
 func isHex(r rune) bool {
 	return (r >= '0' && r <= '9') ||
 		(r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+}
+
+var (
+	errHeredocInvalidUnicode = errors.New("invalid Unicode escape in heredoc delimiter")
+	errHeredocLocaleUnicode  = errors.New("locale-dependent Unicode escape in heredoc delimiter")
+)
+
+// appendANSIQuoted appends the value of a $'...' delimiter fragment using Bash escapes.
+// A null byte truncates this fragment, so later word parts can still be added.
+func appendANSIQuoted(dst []byte, s string) ([]byte, error) {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b == '\\' && i+1 < len(s) {
+			i++
+			c := s[i]
+			switch c {
+			case 'a':
+				b = '\a'
+			case 'b':
+				b = '\b'
+			case 'e', 'E':
+				b = '\x1b'
+			case 'f':
+				b = '\f'
+			case 'n':
+				b = '\n'
+			case 'r':
+				b = '\r'
+			case 't':
+				b = '\t'
+			case 'v':
+				b = '\v'
+			case '\\', '\'', '"', '?':
+				b = c
+			case 'c':
+				if i+1 == len(s) {
+					dst = append(dst, '\\', c)
+					continue
+				}
+				i++
+				b = s[i] & 0x1f
+				if s[i] == '?' {
+					b = 0x7f
+				} else if s[i] == '\\' && i+1 < len(s) && s[i+1] == '\\' {
+					i++
+				}
+			case '0', '1', '2', '3', '4', '5', '6', '7', 'x', 'u', 'U':
+				start, base, width := i, 8, 3
+				switch c {
+				case 'x':
+					start, base, width = i+1, 16, 2
+				case 'u':
+					start, base, width = i+1, 16, 4
+				case 'U':
+					start, base, width = i+1, 16, 8
+				}
+				end := start
+				for end < min(start+width, len(s)) {
+					digit := s[end]
+					if base == 8 && (digit < '0' || digit > '7') || base == 16 && !isHex(rune(digit)) {
+						break
+					}
+					end++
+				}
+				if end == start {
+					dst = append(dst, '\\', c)
+					continue
+				}
+				n, _ := strconv.ParseUint(s[start:end], base, 32)
+				i = end - 1
+				if c == 'u' || c == 'U' {
+					if n == 0 {
+						return dst, nil
+					}
+					if n > math.MaxInt32 {
+						// Bash's UTF-8 encoder discards values above 31 bits.
+						continue
+					}
+					if !utf8.ValidRune(rune(n)) {
+						return nil, errHeredocInvalidUnicode
+					}
+					// Bash uses the current locale for non-ASCII Unicode
+					// escapes. Its C locale keeps an escape spelling.
+					if n >= utf8.RuneSelf {
+						return nil, errHeredocLocaleUnicode
+					}
+				}
+				b = byte(n)
+			default:
+				dst = append(dst, '\\', c)
+				continue
+			}
+		}
+		if b == 0 {
+			break
+		}
+		dst = append(dst, b)
+	}
+	return dst, nil
 }

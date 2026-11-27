@@ -23,6 +23,73 @@ import (
 	"mvdan.cc/sh/v3/internal"
 )
 
+func TestHeredocDelimiterAfterExpansion(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, op, indent, suffix string
+	}{
+		{"parameter", "<<", "", "EOF"},
+		{"dash heredoc", "<<-", "\t", "\tEOF"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := "cat " + tc.op + "EOF\n" + tc.indent + "${label}" + tc.suffix + "\nsome body text\n" + tc.indent + "EOF\necho after\n"
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			r := f.Stmts[0].Redirs[0]
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(4)))
+			qt.Check(t, qt.Equals(r.ClosePos.Col(), uint(len(tc.indent)+1)))
+			parts := r.Hdoc.Parts
+			qt.Assert(t, qt.HasLen(parts, 2+len(tc.indent)))
+			qt.Check(t, qt.Equals(parts[len(tc.indent)].(*ParamExp).Param.Value, "label"))
+			qt.Check(t, qt.Equals(parts[len(parts)-1].(*Lit).Value, tc.suffix+"\nsome body text\n"+tc.indent))
+			qt.Check(t, qt.Equals(f.Stmts[1].Cmd.(*CallExpr).Args[0].Lit(), "echo"))
+		})
+	}
+}
+
+func TestQuotedCarriageReturnsBeforeNewline(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, src, want string
+		stmts           int
+	}{
+		{"single quotes", "printf '%s' 'a\r\nb'\n", "printf '%s' 'a\r\nb'\n", 1},
+		{"double quotes after an expansion", "printf '%s' \"$name\r\nb\"\n", "printf '%s' \"$name\r\nb\"\n", 1},
+		{"quoted parameter default", "printf '%s' \"${name:-a\r\nb}\"\n", "printf '%s' \"${name:-a\r\nb}\"\n", 1},
+		{"backslash before CRLF in double quotes", "printf '%s' \"a\\\r\nb\"\n", "printf '%s' \"a\\\r\nb\"\n", 1},
+		{"quoted heredoc", "cat <<'EOF'\na\r\nb\nEOF\n", "cat <<'EOF'\na\r\nb\nEOF\n", 1},
+		{"delimiter-shaped body line", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", "cat <<'EOF'\nEOF\r\nbody\nEOF\n", 1},
+		{"CRLF heredoc layout", "cat <<'EOF'\r\na\r\nb\r\nEOF\r\necho after\r\n", "cat <<'EOF'\na\r\nb\r\nEOF\necho after\n", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f, err := NewParser().Parse(strings.NewReader(tc.src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Check(t, qt.Equals(len(f.Stmts), tc.stmts))
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.Equals(out.String(), tc.want))
+		})
+	}
+}
+
+func TestQuotedHeredocLFOpeningAndCRLFDelimiter(t *testing.T) {
+	t.Parallel()
+	const src = "cat <<'EOF'\nbar\\\r\nEOF\r\n"
+	f, err := NewParser().Parse(strings.NewReader(src), "")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+	r := f.Stmts[0].Redirs[0]
+	qt.Check(t, qt.IsFalse(r.ClosePos.IsValid()))
+	qt.Assert(t, qt.IsNotNil(r.Hdoc))
+	qt.Check(t, qt.Equals(r.Hdoc.Lit(), "bar\\\r\nEOF\r\n"))
+	var out strings.Builder
+	qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+	qt.Check(t, qt.Equals(out.String(), src+"EOF\n"))
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
