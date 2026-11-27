@@ -755,13 +755,14 @@ func (p *Parser) postNested(s saveState) {
 	p.quote, p.buriedHdocs = s.quote, s.buriedHdocs
 }
 
-func (p *Parser) unquotedWordBytes(w *Word) ([]byte, bool) {
-	buf := make([]byte, 0, 4)
-	didUnquote := false
+func (p *Parser) unquotedWordBytes(w *Word) (buf []byte, quoted bool) {
+	buf = make([]byte, 0, 4)
 	for _, wp := range w.Parts {
-		buf, didUnquote = p.unquotedWordPart(buf, wp, false)
+		var partQuoted bool
+		buf, partQuoted = p.unquotedWordPart(buf, wp, false)
+		quoted = quoted || partQuoted
 	}
-	return buf, didUnquote
+	return buf, quoted
 }
 
 func (p *Parser) unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byte, quoted bool) {

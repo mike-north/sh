@@ -23,6 +23,74 @@ import (
 	"mvdan.cc/sh/v3/internal"
 )
 
+func TestPartlyQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, delim := range []string{`'E'ND`, `"E"ND`, `E\ND`} {
+		t.Run(delim, func(t *testing.T) {
+			t.Parallel()
+			f, err := NewParser().Parse(strings.NewReader("cat <<"+delim+"\n$(printf marker)\nEND\n"), "")
+			qt.Assert(t, qt.IsNil(err))
+			parts := f.Stmts[0].Redirs[0].Hdoc.Parts
+			qt.Assert(t, qt.HasLen(parts, 1))
+			lit, ok := parts[0].(*Lit)
+			qt.Assert(t, qt.IsTrue(ok))
+			qt.Check(t, qt.Equals(lit.Value, "$(printf marker)\n"))
+		})
+	}
+}
+
+func TestMultibytePartlyQuotedHeredocDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, op, prefix, body, indent string
+	}{
+		{"plain", "<<", "É", "ordinary body\n", ""},
+		{"plain empty", "<<", "É", "", ""},
+		{"tab stripping", "<<-", "🚀", "\tordinary body\n", "\t"},
+		{"tab stripping empty", "<<-", "🚀", "", "\t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat %s'%s'ND\n%s%s%sND\necho after\n", tc.op, tc.prefix, tc.body, tc.indent, tc.prefix)
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			hdoc := f.Stmts[0].Redirs[0].Hdoc
+			want := tc.body + tc.indent
+			if want == "" {
+				qt.Check(t, qt.IsNil(hdoc))
+			} else {
+				qt.Assert(t, qt.IsNotNil(hdoc))
+				qt.Check(t, qt.Equals(hdoc.Lit(), want))
+			}
+			qt.Check(t, qt.Equals(f.Stmts[1].Cmd.(*CallExpr).Args[0].Lit(), "echo"))
+		})
+	}
+}
+
+func TestPartlyQuotedHeredocInBackquotes(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"continued empty line", "\\\n", "\t"},
+		{"continued body text", "a\\\nb\n", "ab\n\t"},
+		{"escaped backslash", "a\\\\\nb\n", "a\\\nb\n\t"},
+		{"escaped backslash before continuation", "a\\\\\\\nb\n", "a\\b\n\t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := "echo `\ncat <<-'E'ND\n" + tc.body + "\tEND\n`\necho after\n"
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			subst := f.Stmts[0].Cmd.(*CallExpr).Args[1].Parts[0].(*CmdSubst)
+			qt.Assert(t, qt.Equals(len(subst.Stmts), 1))
+			qt.Check(t, qt.Equals(subst.Stmts[0].Redirs[0].Hdoc.Lit(), tc.want))
+		})
+	}
+}
+
 func TestParseFiles(t *testing.T) {
 	t.Parallel()
 	for lang := range langResolvedVariants.bits() {
