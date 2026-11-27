@@ -18,9 +18,7 @@ import "strings"
 //	Use single quotes to shorten literals    "\$foo"
 func Simplify(n Node) bool {
 	s := simplifier{keepParams: make(map[ArithmExpr]bool)}
-	for node := range Preorder(n) {
-		s.visit(node)
-	}
+	Walk(n, s.walk)
 	return s.modified
 }
 
@@ -30,6 +28,17 @@ type simplifier struct {
 	// keepParams holds arithmetic nodes within an array index
 	// or a math function call; see [simplifier.markIndex].
 	keepParams map[ArithmExpr]bool
+}
+
+func (s *simplifier) walk(node Node) bool {
+	if r, ok := node.(*Redirect); ok && (r.Op == Hdoc || r.Op == DashHdoc) {
+		// The spelling of the word controls where the body ends.
+		walkNilable(r.N, s.walk)
+		walkNilable(r.Hdoc, s.walk)
+		return false
+	}
+	s.visit(node)
+	return true
 }
 
 // markIndex records an array index so that its parameters are not inlined,

@@ -6,6 +6,7 @@ package syntax
 import (
 	"bytes"
 	"io"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -100,6 +101,12 @@ retry:
 			p.col++
 			goto retry
 		case '\r':
+			p.readCRs++
+			if p.r == '\\' && (p.litBs == nil || !p.litKeepCR) {
+				// Formatting can move an escaped bare CR up against a
+				// newline, where it would be consumed as a continuation.
+				p.unquotedEscapedCR = true
+			}
 			if p.peek() == '\n' { // \r\n turns into \n
 				p.crlf = true
 				if p.litBs != nil && p.litKeepCR {
@@ -115,6 +122,7 @@ retry:
 				p.w, p.r = 1, escNewl
 				return escNewl
 			} else if p1, p2 := p.peekTwo(); p1 == '\r' && p2 == '\n' { // \\\r\n turns into \\\n
+				p.readCRs++
 				p.crlf = true
 				p.col++
 				p.bsp += 2
@@ -258,6 +266,31 @@ func (p *Parser) keepQuotedCR() bool {
 	return p.quote == dblQuotes || p.paramExpKeepCR && p.quote&(paramExpExp|paramExpRepl) != 0
 }
 
+// scanningHeredocWord excludes the lookahead token when a blank has
+// already separated it from the delimiter.
+func (p *Parser) scanningHeredocWord() bool {
+	return p.quote == hdocWord && (!p.spaced || p.tok == hdoc || p.tok == dashHdoc)
+}
+
+func (p *Parser) noteSplitHeredocComment(text string) {
+	if p.unicodeHeredoc != nil || !strings.Contains(text, "$'") {
+		return
+	}
+	// The legacy lexer treats a hash after the discarded CR as a comment.
+	// Bash instead includes the hash in the word. Inspect the first word
+	// for a Unicode escape without changing how the original is parsed.
+	probe := NewParser(Variant(p.lang))
+	for w, err := range probe.WordsSeq(strings.NewReader("x#" + text)) {
+		if err == nil {
+			_, _, nonASCIIUnicode, _ := decodeHeredocDelimiter(&Redirect{Op: Hdoc, Word: w})
+			if nonASCIIUnicode {
+				p.unicodeHeredoc = &Comment{Hash: p.pos}
+			}
+		}
+		break
+	}
+}
+
 func (p *Parser) next() {
 	p.lineCom = Pos{}
 	if p.r == runeEOF {
@@ -270,21 +303,23 @@ func (p *Parser) next() {
 		return
 	}
 	r := p.r
-	for r == escNewl {
-		r = p.rune()
-	}
 skipSpace:
 	for {
 		switch r {
 		case runeEOF:
 			p.tok = _EOF
 			return
-		case escNewl:
-			r = p.rune()
-		case ' ', '\t', '\r':
-			p.spaced = true
+		case ' ', '\t', '\r', escNewl:
+			switch r {
+			case '\r':
+				p.crSplitHeredoc = p.crSplitHeredoc || p.scanningHeredocWord()
+			case ' ', '\t':
+				p.crSplitHeredoc = false
+			}
+			p.spaced = p.spaced || r != escNewl
 			r = p.rune()
 		case '\n':
+			p.crSplitHeredoc = false
 			if p.tok == _Newl {
 				// merge consecutive newline tokens
 				r = p.rune()
@@ -313,6 +348,12 @@ skipSpace:
 		}
 	}
 	p.pos = p.nextPos()
+	if p.crSplitHeredoc {
+		switch r {
+		case ';', '&', '|', '(', ')', '<', '>', '`':
+			p.crSplitHeredoc = false
+		}
+	}
 	switch {
 	case p.quote&allRegTokens != 0:
 		switch r {
@@ -326,7 +367,8 @@ skipSpace:
 			// If we're parsing $foo#bar, ${foo}#bar, 'foo'#bar, or "foo"#bar,
 			// #bar is a continuation of the same word, not a comment.
 			// The same applies inside [[ ]] tests, where '#' has no comment meaning.
-			if !p.spaced && (p.quote == unquotedWordCont || p.quote == testExpr) {
+			continuingHdoc := p.quote == hdocWord && p.tok != hdoc && p.tok != dashHdoc
+			if !p.spaced && (p.quote == unquotedWordCont || p.quote == testExpr || continuingHdoc) {
 				p.advanceLitNone(r)
 				return
 			}
@@ -347,11 +389,15 @@ skipSpace:
 				}
 				r = p.rune()
 			}
-			if p.keepComments {
-				*p.curComs = append(*p.curComs, Comment{
-					Hash: p.pos,
-					Text: p.endLit(),
-				})
+			if p.keepComments || p.crSplitHeredoc {
+				text := p.endLit()
+				if p.crSplitHeredoc {
+					p.noteSplitHeredocComment(text)
+				}
+				if p.keepComments {
+					p.keepCRs(text)
+					*p.curComs = append(*p.curComs, Comment{Hash: p.pos, Text: text})
+				}
 			} else {
 				p.litBs = nil
 			}
@@ -1024,7 +1070,7 @@ func (p *Parser) appendQuotedEscNewl() {
 	p.litBs = append(p.litBs, '\n')
 }
 
-// quotedPos includes the first byte of a CRLF sequence in literal data.
+// quotedPos includes the first byte of a CRLF or backslash-newline in literal data.
 func (p *Parser) quotedPos() Pos {
 	pos := p.nextPos()
 	if p.crlf {
@@ -1033,6 +1079,9 @@ func (p *Parser) quotedPos() Pos {
 			col--
 		}
 		return NewPos(pos.Offset()-1, pos.Line(), col)
+	}
+	if p.r == escNewl {
+		return NewPos(pos.Offset()-1, pos.Line(), pos.Col())
 	}
 	return pos
 }
@@ -1375,6 +1424,12 @@ func (p *Parser) quotedHdocWord(crlf bool) *Word {
 			p.hdocClosePos = lPos
 			p.hdocStops[len(p.hdocStops)-1] = nil
 			val := p.endLit()[:lStart]
+			if r == escNewl {
+				// The backslash belongs to the closing word. Leave
+				// only the newline for the next heredoc or token.
+				p.r, p.w = '\n', 1
+				p.col++
+			}
 			if val == "" {
 				return nil
 			}

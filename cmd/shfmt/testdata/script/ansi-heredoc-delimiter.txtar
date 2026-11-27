@@ -1,6 +1,35 @@
+# Bash 5.3 accepts the expected output with no stdout or stderr:
+#   printf '%s\n' "<<\$'\u00e9'" 'é' | LC_ALL=C.utf8 /usr/bin/bash
+env LC_ALL=C
 stdin delimiter.json
+exec shfmt --from-json
+cmp stdout formatted.sh
+! stderr .
+
+stdin backslash.json
+exec shfmt --from-json
+cmp stdout backslash.sh
+cp stdout reformatted.sh
+stdin reformatted.sh
+exec shfmt
+cmp stdout backslash.sh
+
+stdin invalid.json
 ! exec shfmt --from-json
-stderr 'locale-dependent Unicode escape in heredoc delimiter'
+stderr 'invalid Unicode escape in heredoc delimiter'
+! stdout .
+
+stdin c-locale.sh
+! exec shfmt
+stderr 'unclosed heredoc with a non-ASCII Unicode escape'
+! stdout .
+
+stdin c-locale.sh
+exec shfmt --to-json
+cp stdout parsed.json
+stdin parsed.json
+! exec shfmt --from-json
+stderr 'unclosed heredoc with a non-ASCII Unicode escape'
 ! stdout .
 
 -- delimiter.json --
@@ -10,6 +39,42 @@ stderr 'locale-dependent Unicode escape in heredoc delimiter'
 		"Redirs": [{
 			"Op": "<<",
 			"Word": {"Parts": [{"Type": "SglQuoted", "Dollar": true, "Value": "\\u00e9"}]}
+		}]
+	}]
+}
+-- formatted.sh --
+<<$'\u00e9'
+é
+-- backslash.json --
+{
+	"Type": "File",
+	"Stmts": [{
+		"Redirs": [{
+			"Op": "<<",
+			"Word": {"Parts": [
+				{"Type": "SglQuoted", "Dollar": true, "Value": "\\u00e9"},
+				{"Type": "Lit", "Value": "\\"}
+			]},
+			"Hdoc": {"Parts": [{"Type": "Lit", "Value": "body\n"}]}
+		}]
+	}]
+}
+-- backslash.sh --
+<<$'\u00e9'\\
+body
+é\
+-- c-locale.sh --
+cat <<$'\u00e9'
+body
+\u00E9
+echo after
+-- invalid.json --
+{
+	"Type": "File",
+	"Stmts": [{
+		"Redirs": [{
+			"Op": "<<",
+			"Word": {"Parts": [{"Type": "SglQuoted", "Dollar": true, "Value": "\\U00110000"}]}
 		}]
 	}]
 }

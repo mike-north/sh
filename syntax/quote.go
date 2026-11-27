@@ -180,14 +180,12 @@ func isHex(r rune) bool {
 		(r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
-var (
-	errHeredocInvalidUnicode = errors.New("invalid Unicode escape in heredoc delimiter")
-	errHeredocLocaleUnicode  = errors.New("locale-dependent Unicode escape in heredoc delimiter")
-)
+var errHeredocInvalidUnicode = errors.New("invalid Unicode escape in heredoc delimiter")
 
 // appendANSIQuoted appends the value of a $'...' delimiter fragment using Bash escapes.
+// Unicode escapes use UTF-8 regardless of locale.
 // A null byte truncates this fragment, so later word parts can still be added.
-func appendANSIQuoted(dst []byte, s string) ([]byte, error) {
+func appendANSIQuoted(dst []byte, s string, nonASCIIUnicode *bool) ([]byte, error) {
 	for i := 0; i < len(s); i++ {
 		b := s[i]
 		if b == '\\' && i+1 < len(s) {
@@ -228,6 +226,9 @@ func appendANSIQuoted(dst []byte, s string) ([]byte, error) {
 				start, base, width := i, 8, 3
 				switch c {
 				case 'x':
+					if i+1 < len(s) && s[i+1] == '{' {
+						return nil, errors.New("braced hexadecimal escape in heredoc delimiter")
+					}
 					start, base, width = i+1, 16, 2
 				case 'u':
 					start, base, width = i+1, 16, 4
@@ -259,11 +260,9 @@ func appendANSIQuoted(dst []byte, s string) ([]byte, error) {
 					if !utf8.ValidRune(rune(n)) {
 						return nil, errHeredocInvalidUnicode
 					}
-					// Bash uses the current locale for non-ASCII Unicode
-					// escapes. Its C locale keeps an escape spelling.
-					if n >= utf8.RuneSelf {
-						return nil, errHeredocLocaleUnicode
-					}
+					*nonASCIIUnicode = *nonASCIIUnicode || n >= utf8.RuneSelf
+					dst = utf8.AppendRune(dst, rune(n))
+					continue
 				}
 				b = byte(n)
 			default:

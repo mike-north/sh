@@ -4,10 +4,13 @@
 package syntax
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-quicktest/qt"
 )
@@ -42,6 +45,10 @@ func TestANSIQuotedHeredocDelimiter(t *testing.T) {
 
 func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
 	t.Parallel()
+	// Bash 5.3 prints "body\nafter\n" for each of these commands:
+	//   printf '%s\n' "cat <<\$'\Uffffffff'" body '' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'E\U80000000ND'" body END 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\xef\xbf\xbd'" body '�' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
 	for _, tc := range []struct {
 		escaped, delimiter string
 	}{
@@ -61,38 +68,673 @@ func TestANSIQuotedHeredocDelimiterOutOfRangeUnicode(t *testing.T) {
 			qt.Check(t, qt.Equals(out.String(), src))
 		})
 	}
-	t.Run("invalid UTF-8", func(t *testing.T) {
-		t.Parallel()
-		const src = "cat <<$'\\U00110000'\nbody\n"
-		_, err := NewParser().Parse(strings.NewReader(src), "")
-		qt.Check(t, qt.ErrorMatches(err, `.*invalid Unicode escape in heredoc delimiter`))
-	})
+	// Bash 5.3 closes the heredocs on the invalid UTF-8 bytes and prints
+	// "body\nafter\n". The lexer requires valid UTF-8 source.
+	//   printf '%s\n' "cat <<\$'\U00110000'" body "$(printf '\364\220\200\200')" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\uD800'" body "$(printf '\355\240\200')" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	for _, tc := range []struct {
+		escape, delimiter string
+	}{
+		{`\U00110000`, "\xf4\x90\x80\x80"},
+		{`\uD800`, "\xed\xa0\x80"},
+	} {
+		t.Run(tc.escape, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escape, tc.delimiter)
+			_, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Check(t, qt.ErrorMatches(err, `.*invalid Unicode escape in heredoc delimiter`))
+		})
+	}
 }
 
 func TestANSIQuotedHeredocDelimiterLocale(t *testing.T) {
 	t.Parallel()
+	// Bash 5.3 prints the body followed by "after" in both C.utf8 and
+	// en_US.utf8. It strips the leading tab from the body with <<-.
+	//   printf '%s\n' "cat <<\$'\u00e9OF'" '$(printf marker)' '\u00E9OF' 'éOF suffix' 'éOF' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\U000000e9'" body 'é' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<-pre\$'\U0001f600'post" $'\tbody' $'\tpre😀post' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\uFFFD'" body '�' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'\$'\xc3'\$'\xa9'" body 'éé' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
 	for _, tc := range []struct {
-		name, escape, closing string
+		name, opener, body, closingIndent, delimiter string
 	}{
-		{"C locale spelling", `\u00e9`, `\u00E9`},
-		{"UTF-8 locale spelling", `\u00e9`, "é"},
-		{"long escape", `\U000000e9`, "é"},
+		{"short escape", `cat <<$'\u00e9OF'`, "$(printf marker)\n\\u00E9OF\néOF suffix\n", "", "éOF"},
+		{"long escape", `cat <<$'\U000000e9'`, "body\n", "", "é"},
+		{"tab-stripping and mixed fragments", `cat <<-pre$'\U0001f600'post`, "\tbody\n", "\t", "pre😀post"},
+		{"replacement character", `cat <<$'\uFFFD'`, "body\n", "", "\uFFFD"},
+		{"UTF-8 bytes across parts", `cat <<$'\u00e9'$'\xc3'$'\xa9'`, "body\n", "", "éé"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf("cat <<$'%s'\nbody\n%s\necho after\n", tc.escape, tc.closing)
+			src := tc.opener + "\n" + tc.body + tc.closingIndent + tc.delimiter + "\necho after\n"
+			f, err := NewParser().Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			r := f.Stmts[0].Redirs[0]
+			qt.Check(t, qt.Equals(r.ClosePos.Line(), uint(2+strings.Count(tc.body, "\n"))))
+			qt.Assert(t, qt.Equals(len(r.Hdoc.Parts), 1))
+			// The AST includes the indentation before a <<- closing word.
+			qt.Check(t, qt.Equals(r.Hdoc.Parts[0].(*Lit).Value, tc.body+tc.closingIndent))
+			args := f.Stmts[1].Cmd.(*CallExpr).Args
+			qt.Assert(t, qt.Equals(len(args), 2))
+			qt.Check(t, qt.Equals(args[0].Lit(), "echo"))
+			qt.Check(t, qt.Equals(args[1].Lit(), "after"))
+
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			want := tc.opener + "\n" + tc.body + tc.delimiter + "\necho after\n"
+			qt.Check(t, qt.Equals(out.String(), want))
+		})
+	}
+	t.Run("C locale spelling", func(t *testing.T) {
+		t.Parallel()
+		// With LC_ALL=C, Bash 5.3 closes on the escape spelling and
+		// prints "body\nafter\n". In C.utf8 the heredoc ends at EOF.
+		//   printf '%s\n' "cat <<\$'\u00e9'" body '\u00E9' 'echo after' | LC_ALL=C /usr/bin/bash
+		//   printf '%s\n' "cat <<\$'\u00e9'" body '\u00E9' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+		const body = "body\n\\u00E9\necho after\n"
+		f, err := NewParser().Parse(strings.NewReader("cat <<$'\\u00e9'\n"+body), "")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(len(f.Stmts), 1))
+		r := f.Stmts[0].Redirs[0]
+		qt.Check(t, qt.IsFalse(r.ClosePos.IsValid()))
+		qt.Assert(t, qt.Equals(len(r.Hdoc.Parts), 1))
+		qt.Check(t, qt.Equals(r.Hdoc.Parts[0].(*Lit).Value, body))
+
+		var out strings.Builder
+		qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), `.*unclosed heredoc with a non-ASCII Unicode escape`))
+	})
+	t.Run("constructed AST", func(t *testing.T) {
+		t.Parallel()
+		// Bash 5.3 prints "body\nafter\n" for the expected source.
+		//   printf '%s\n' "cat <<\$'\u00e9'" body 'é' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+		f, err := NewParser().Parse(strings.NewReader("cat <<'EOF'\nbody\nEOF\necho after\n"), "")
+		qt.Assert(t, qt.IsNil(err))
+		r := f.Stmts[0].Redirs[0]
+		r.Word.Parts[0] = &SglQuoted{Dollar: true, Value: `\u00e9`}
+		var out strings.Builder
+		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+		qt.Check(t, qt.Equals(out.String(), "cat <<$'\\u00e9'\nbody\né\necho after\n"))
+	})
+}
+
+func TestANSIQuotedHeredocDelimiterUnsafe(t *testing.T) {
+	t.Parallel()
+	// Bash 5.3 matches an exact tab-leading delimiter before stripping tabs.
+	// The first command prints "body\n" and exits 1. The second prints
+	// "body\né\nafter\n" because the line with two tabs stays in the body.
+	//
+	//   printf '%s\n' "cat <<-\$'\t\u00e9'" body $'\té' false | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' 'if true; then' $'\t'"cat <<-\$'\t\u00e9'" $'\tbody' $'\t\té' $'\té' $'\techo after' fi | LC_ALL=C.utf8 /usr/bin/bash
+	//
+	// Bash 5.3 adds a quoting byte to delimiters with \cA, \x01, and \x7f.
+	// Each command prints "body\nafter\n".
+	//
+	//   printf '%s\n' "cat <<\$'\u00e9\cA'" body $'é\x01\x01' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9\x01'" body $'é\x01\x01' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9\x7f'" body $'é\x01\x7f' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//
+	// These commands print "body\n" and warn about the missing delimiter.
+	//
+	//   printf '%s\n' "cat <<\$'\u00e9\x80'" body | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9\377'" body | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9\nEND'" body | LC_ALL=C.utf8 /usr/bin/bash
+	//
+	// Bash treats \x{41} in this context as A and prints "body\nafter\n".
+	//
+	//   printf '%s\n' "cat <<\$'\u00e9\x{41}'" body 'éA' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	for _, tc := range []struct {
+		op                RedirOperator
+		value, rest, want string
+	}{
+		{DashHdoc, `\t\u00e9`, "\té\nfalse\n", "heredoc delimiter starts with a tab after <<-"},
+		{Hdoc, `\u00e9\cA`, "é\x01\x01\necho after\n", "heredoc delimiter contains a Bash quoting byte"},
+		{Hdoc, `\u00e9\x01`, "é\x01\x01\necho after\n", "heredoc delimiter contains a Bash quoting byte"},
+		{Hdoc, `\u00e9\x7f`, "é\x01\x7f\necho after\n", "heredoc delimiter contains a Bash quoting byte"},
+		{Hdoc, `\u00e9\x80`, "", "heredoc delimiter contains invalid UTF-8"},
+		{Hdoc, `\u00e9\377`, "", "heredoc delimiter contains invalid UTF-8"},
+		{Hdoc, `\u00e9\nEND`, "", "heredoc delimiter contains a newline"},
+		{Hdoc, `\u00e9\x{41}`, "éA\necho after\n", "braced hexadecimal escape in heredoc delimiter"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Parallel()
+			src := fmt.Sprintf("cat %s$'%s'\nbody\n%s", tc.op, tc.value, tc.rest)
 			_, err := NewParser().Parse(strings.NewReader(src), "")
-			qt.Check(t, qt.ErrorMatches(err, `.*locale-dependent Unicode escape in heredoc delimiter`))
+			qt.Check(t, qt.ErrorMatches(err, ".*"+tc.want))
+
+			f, err := NewParser().Parse(strings.NewReader("if true; then\n\tcat "+tc.op.String()+"'EOF'\n\tbody\nEOF\n\techo after\nfi\n"), "")
+			qt.Assert(t, qt.IsNil(err))
+			r := f.Stmts[0].Cmd.(*IfClause).Then[0].Redirs[0]
+			r.Word.Parts[0] = sglDQuoted(tc.value)
+			var out strings.Builder
+			qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), tc.want))
+		})
+	}
+}
+
+func TestANSIQuotedHeredocDelimiterCRLF(t *testing.T) {
+	t.Parallel()
+	// Bash 5.3 includes the carriage return in the opening word. Only the
+	// second é line closes the heredoc, so it prints "body\né\nafter\n".
+	//
+	//   printf '%s\r\n%s\n%s\n%s\r\n%s\n' "cat <<\$'\u00e9'" body 'é' 'é' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	src := "cat <<$'\\u00e9'\r\nbody\né\né\r\necho after\n"
+	_, err := NewParser().Parse(strings.NewReader(src), "")
+	qt.Check(t, qt.ErrorMatches(err, `.*carriage return.*heredoc.*`))
+}
+
+func TestANSIQuotedHeredocDelimiterBareCR(t *testing.T) {
+	t.Parallel()
+	// Bash 5.3 includes the CR in the delimiter in all of these positions.
+	// The first command prints "body\né\necho after\n". The rest print
+	// "body\nafter\n".
+	//
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\r # comment' body é 'echo after' $'é\r' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\r#tail' body $'é\r#tail' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'#tail"$'\r # comment' body $'é#tail\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' 'cat <<'$'\r'"\$'\u00e9'" body $'\ré' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' 'cat << '$'\r'"\$'\u00e9'" body $'\ré' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' 'cat <<x'$'\r'"\$'\u00e9'y" body $'x\réy' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<x\$'\u00e9'"$'\ry' body $'xé\ry' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\r''"x"' body $'é\rx' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'\"x\""$'\r # comment' body $'éx\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\\\n\rx' body $'é\rx' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\\\r' body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'x"$'\\\r' body $'éx\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<-x\$'\U0001f600'y"$'\r # comment' body $'\tx😀y\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\\\r ' body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'"$'\\\r # comment' body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<-\$'\u00e9'"$'\\\r\t ' $'\tbody' $'\té\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' 'cat <<x'$'\\\r'"\$'\u00e9'y" body $'x\réy' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	for _, tc := range []struct {
+		name, source string
+	}{
+		{"before a comment", "cat <<$'\\u00e9'\r # comment\nbody\né\necho after\né\r\n"},
+		{"before an attached hash", "cat <<$'\\u00e9'\r#tail\nbody\né\r#tail\necho after\n"},
+		{"after an attached hash", "cat <<$'\\u00e9'#tail\r # comment\nbody\né#tail\r\necho after\n"},
+		{"before the first fragment", "cat <<\r$'\\u00e9'\nbody\n\ré\necho after\n"},
+		{"after redirect whitespace", "cat << \r$'\\u00e9'\nbody\n\ré\necho after\n"},
+		{"after an unquoted fragment", "cat <<x\r$'\\u00e9'y\nbody\nx\réy\necho after\n"},
+		{"before an unquoted fragment", "cat <<x$'\\u00e9'\ry\nbody\nxé\ry\necho after\n"},
+		{"between quoted fragments", "cat <<$'\\u00e9'\r\"x\"\nbody\né\rx\necho after\n"},
+		{"after double quotes", "cat <<$'\\u00e9'\"x\"\r # comment\nbody\néx\r\necho after\n"},
+		{"after escaped newline", "cat <<$'\\u00e9'\\\n\rx\nbody\né\rx\necho after\n"},
+		{"escaped CRLF after a quote", "cat <<$'\\u00e9'\\\r\nbody\né\r\necho after\n"},
+		{"escaped CRLF after a literal", "cat <<$'\\u00e9'x\\\r\nbody\néx\r\necho after\n"},
+		{"tab stripping and mixed fragments", "cat <<-x$'\\U0001f600'y\r # comment\nbody\n\tx😀y\r\necho after\n"},
+		{"escaped bare CR before whitespace", "cat <<$'\\u00e9'\\\r \nbody\né\r\necho after\n"},
+		{"escaped bare CR before a comment", "cat <<$'\\u00e9'\\\r # comment\nbody\né\r\necho after\n"},
+		{"escaped bare CR and tab stripping", "cat <<-$'\\u00e9'\\\r\t \n\tbody\n\té\r\necho after\n"},
+		{"escaped bare CR between fragments", "cat <<x\\\r$'\\u00e9'y\nbody\nx\réy\necho after\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := NewParser().Parse(strings.NewReader(tc.source), "")
+			qt.Check(t, qt.ErrorMatches(err, `.*carriage return.*heredoc.*`))
 		})
 	}
 	t.Run("constructed AST", func(t *testing.T) {
 		t.Parallel()
 		f, err := NewParser().Parse(strings.NewReader("cat <<'EOF'\nbody\nEOF\n"), "")
 		qt.Assert(t, qt.IsNil(err))
-		r := f.Stmts[0].Redirs[0]
-		r.Word.Parts[0] = &SglQuoted{Dollar: true, Value: `\u00e9`}
+		f.Stmts[0].Redirs[0].Word = word(sglDQuoted(`\u00e9`), lit("\\\r"))
 		var out strings.Builder
-		qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), `.*locale-dependent Unicode escape in heredoc delimiter`))
+		qt.Check(t, qt.ErrorMatches(NewPrinter().Print(&out, f), `.*carriage return in heredoc delimiter`))
+	})
+}
+
+func TestHeredocDelimiterQuotedCRRoundTrip(t *testing.T) {
+	t.Parallel()
+	// Each command prints "body\nafter\n" in Bash 5.3.
+	//
+	//   printf '%s\n' "cat <<\$'\u00e9\r'" body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9''"$'\r'"'" body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<\$'\u00e9'\""$'\r'"\"" body $'é\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat <<-\$'\u00e9'\""$'\\\r'"\"" body $'é\\\r' 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	for _, tc := range []struct {
+		name, opener, closer string
+	}{
+		{"ANSI-C escape", `cat <<$'\u00e9\r'`, "é\r"},
+		{"single quotes", "cat <<$'\\u00e9''\r'", "é\r"},
+		{"double quotes", "cat <<$'\\u00e9'\"\r\"", "é\r"},
+		{"backslash in double quotes", "cat <<-$'\\u00e9'\"\\\r\"", "é\\\r"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := tc.opener + "\nbody\n" + tc.closer + "\necho after\n"
+			parser := NewParser()
+			f, err := parser.Parse(strings.NewReader(src), "")
+			qt.Assert(t, qt.IsNil(err))
+			printer := NewPrinter()
+			var first, second strings.Builder
+			qt.Assert(t, qt.IsNil(printer.Print(&first, f)))
+
+			f, err = parser.Parse(strings.NewReader(first.String()), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			qt.Check(t, qt.Equals(f.Stmts[0].Redirs[0].ClosePos.Line(), uint(3)))
+			qt.Assert(t, qt.IsNil(printer.Print(&second, f)))
+			qt.Check(t, qt.Equals(second.String(), first.String()))
+		})
+	}
+}
+
+func TestUnicodeHeredocDiscardedCR(t *testing.T) {
+	t.Parallel()
+	const delimiter = `$'\u00e9'`
+	const closing = "body\né\necho after\n"
+	const diagnostic = `.*carriage return.*Unicode heredoc.*`
+	// The first two scripts print <CR> followed by "after" or "AFTER"
+	// in Bash 5.3. CR denotes an actual carriage-return byte.
+	//
+	//   printf '%s\n' "printf '<%s>\\n' "$'\r \\' "<<\$'\u00e9'" body é 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "printf '<%s>\\n' <<\$'\u00e9' "$'\\\r' '# note' body é "printf 'AFTER\n'" | LC_ALL=C.utf8 /usr/bin/bash
+	for _, tc := range []struct{ name, source string }{
+		{"earlier physical line", "printf '<%s>\\n' \r \\\n<<" + delimiter + "\n" + closing},
+		{"escaped CRLF before a comment", "printf '<%s>\\n' <<" + delimiter + " \\\r\n# note\n" + closing},
+		{"earlier command", "echo earlier\r\ncat <<" + delimiter + "\n" + closing},
+		{"later command", "cat <<" + delimiter + "\n" + closing + "echo \r later\n"},
+		{"later CRLF", "cat <<" + delimiter + "\n" + closing + "echo later\r\n"},
+		{"later discarded comment", "cat <<" + delimiter + "\n" + closing + "# a\rb\n"},
+		{"later expandable heredoc", "cat <<" + delimiter + "\n" + closing + "cat <<EOF\nbefore\r\nafter\nEOF\n"},
+		{"CR before an attached hash and escape", "cat <<x\r#tag" + delimiter + "\nbody\nx\r#tagé\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewParser().Parse(strings.NewReader(tc.source), "")
+			qt.Check(t, qt.ErrorMatches(err, diagnostic))
+		})
+	}
+
+	for _, tc := range []struct{ name, prefix, suffix string }{
+		{"before a continued argument", "printf '<%s>\\n' ", " \\\n before \\\n<<" + delimiter + "\n" + closing},
+		{"before the continued redirect", "printf '<%s>\\n' \\\n before ", " \\\n<<" + delimiter + "\n" + closing},
+		{"after the redirect", "printf '<%s>\\n' \\\n<<" + delimiter + " ", " \\\n after\n" + closing},
+		{"after a later continued argument", "printf '<%s>\\n' <<" + delimiter + " \\\n before ", " \\\n after\n" + closing},
+		{"before a trailing comment", "printf '<%s>\\n' <<" + delimiter + " \\\n before ", " # comment\n" + closing},
+		{"before another queued heredoc", "printf '<%s>\\n' 3<<" + delimiter + " \\\n ", " \\\n <<EOF\nbody\né\nsecond\nEOF\n"},
+	} {
+		for _, cr := range []struct{ name, spelling string }{
+			{"bare", "\r"},
+			{"escaped bare", "\\\r"},
+			{"escaped CRLF", "\\\r\n"},
+		} {
+			t.Run(tc.name+"/"+cr.name, func(t *testing.T) {
+				p := NewParser(KeepComments(true))
+				source := tc.prefix + cr.spelling + tc.suffix
+				t.Logf("source: %q", source)
+				_, err := p.Parse(strings.NewReader(source), "")
+				qt.Check(t, qt.ErrorMatches(err, diagnostic))
+
+				// The same layout without Unicode delimiter decoding is
+				// accepted, including when the parser is reused.
+				ascii := strings.ReplaceAll(strings.ReplaceAll(source, delimiter, "'E'"), "é\n", "E\n")
+				_, err = p.Parse(strings.NewReader(ascii), "")
+				qt.Check(t, qt.IsNil(err))
+			})
+		}
+	}
+
+	t.Run("retained backslash CR in an unquoted word", func(t *testing.T) {
+		// Bash 5.3 prints "<x\ry>\nbody\nafter\n". The parser refuses even
+		// this mid-word backslash-CR, which formatting could preserve.
+		//
+		//   printf '%s\n' "printf '<%s>\\n' x"$'\\\r'y "cat <<\$'\u00e9'" body é 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+		source := "printf '<%s>\\n' x\\\ry\ncat <<" + delimiter + "\n" + closing
+		_, err := NewParser().Parse(strings.NewReader(source), "")
+		qt.Check(t, qt.ErrorMatches(err, `.*unsupported carriage return in input with a Unicode heredoc delimiter \(bare outside quotes or heredoc bodies, or preceded by a backslash outside a CR-preserving literal\)`))
+	})
+
+	t.Run("preserved CR in another command", func(t *testing.T) {
+		source := "printf '%s' 'left\r\nright'\ncat <<" + delimiter + "\n" + closing
+		f, err := NewParser().Parse(strings.NewReader(source), "")
+		qt.Assert(t, qt.IsNil(err))
+		var out strings.Builder
+		qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+		qt.Check(t, qt.Equals(out.String(), source))
+	})
+	t.Run("ASCII delimiter with CR", func(t *testing.T) {
+		for _, source := range []string{
+			"cat <<E\r \nbody\nE\n",
+			"cat <<E\\\r \nbody\nE\r\n",
+			"cat <<E\\\r\n\nbody\nE\n",
+			"cat <<E\r#tag\nbody\nE\n",
+			"cat <<E\r $'\\u00e9'\nbody\nE\n",
+		} {
+			_, err := NewParser().Parse(strings.NewReader(source), "")
+			qt.Check(t, qt.IsNil(err))
+		}
+	})
+}
+
+func TestHeredocDelimiterQuotingBytes(t *testing.T) {
+	t.Parallel()
+	// Bash 5.3 leaves the bytes literal in an entirely unquoted word and
+	// when a backslash protects the byte. A bare byte in a mixed quoted
+	// word receives a marker, just like a byte inside quotes.
+	// Each of these scripts prints "body\nafter\n".
+	//
+	//   for byte in $'\001' $'\177'; do
+	//     printf '%s\n' "cat <<A$byte" body "A$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\\$byte" body "A$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\$'\u00e9'\\$byte" body "Aé$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\"\\$byte\"" body "A\\$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A'$byte'" body "A"$'\001'"$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\"$byte\"" body "A"$'\001'"$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\$\"$byte\"" body "A"$'\001'"$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\$'$byte'" body "A"$'\001'"$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A$byte\$'\u00e9'" body "A"$'\001'"$byte""é" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//     printf '%s\n' "cat <<A\$'\u00e9'$byte" body "Aé"$'\001'"$byte" 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   done
+	for _, b := range []string{"\x01", "\x7f"} {
+		for _, tc := range []struct {
+			name, word, delimiter string
+			marked                bool
+		}{
+			{"raw", "A" + b, "A" + b, false},
+			{"backslash", "A\\" + b, "A" + b, false},
+			{"backslash after ANSI-C quotes", "A$'\\u00e9'\\" + b, "Aé" + b, false},
+			{"backslash inside double quotes", "A\"\\" + b + "\"", "A\\" + b, false},
+			{"single quotes", "A'" + b + "'", "A\x01" + b, true},
+			{"double quotes", "A\"" + b + "\"", "A\x01" + b, true},
+			{"translated double quotes", "A$\"" + b + "\"", "A\x01" + b, true},
+			{"ANSI-C quotes", "A$'" + b + "'", "A\x01" + b, true},
+			{"unquoted before ANSI-C quotes", "A" + b + "$'\\u00e9'", "A\x01" + b + "é", true},
+			{"unquoted after ANSI-C quotes", "A$'\\u00e9'" + b, "Aé\x01" + b, true},
+		} {
+			t.Run(fmt.Sprintf("%x/%s", b, tc.name), func(t *testing.T) {
+				t.Parallel()
+				src := fmt.Sprintf("cat <<%s\nbody\n%s\necho after\n", tc.word, tc.delimiter)
+				f, err := NewParser().Parse(strings.NewReader(src), "")
+				if tc.marked {
+					qt.Check(t, qt.ErrorMatches(err, `.*heredoc delimiter contains a Bash quoting byte`))
+				} else {
+					qt.Assert(t, qt.IsNil(err))
+					qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+					qt.Check(t, qt.Equals(f.Stmts[0].Redirs[0].ClosePos.Line(), uint(3)))
+					var out strings.Builder
+					qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+					qt.Check(t, qt.Equals(out.String(), src))
+				}
+			})
+		}
+	}
+}
+
+func TestQueuedHeredocsWithBackslashDelimiter(t *testing.T) {
+	t.Parallel()
+	// Bash 5.3 prints "b\nafter\n" for the first two commands, which
+	// differ only in whether the backslash-ending delimiter is Unicode.
+	// The mixed queue prints "a\nb\\\nmore\nc\nd\nafter\n".
+	//
+	//   printf '%s\n' "cat 3<<\$'\u00e9''\\' <<'B'" a 'é\' b B 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat 3<<'A\\' <<'B'" a 'A\' b B 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat /dev/fd/3 /dev/fd/4 /dev/fd/5 - 3<<A 4<<\$'\U0001f600\\\\' 5<<'C' <<D" a A 'b\' more '😀\' c C d D 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//
+	// An empty first body, tab stripping, and a CR in the delimiter
+	// also leave the last body starting with "b".
+	//
+	//   printf '%s\n' "cat 3<<'\\' <<'B'" '\' b B 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat 3<<-\$'\u00e9\\\\' <<'B'" $'\ta' 'é\' b B 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	//   printf '%s\n' "cat 3<<'A\\"$'\r'"' <<'B'" a $'A\\\r' b B 'echo after' | LC_ALL=C.utf8 /usr/bin/bash
+	type document struct {
+		body, closing string
+	}
+	for _, tc := range []struct {
+		name, opener string
+		documents    []document
+	}{
+		{"Unicode", `cat 3<<$'\u00e9''\' <<'B'`, []document{{"a\n", "é\\"}, {"b\n", "B"}}},
+		{"ASCII", `cat 3<<'A\' <<'B'`, []document{{"a\n", "A\\"}, {"b\n", "B"}}},
+		{"mixed quoted and unquoted", `cat /dev/fd/3 /dev/fd/4 /dev/fd/5 - 3<<A 4<<$'\U0001f600\\' 5<<'C' <<D`,
+			[]document{{"a\n", "A"}, {"b\\\nmore\n", "😀\\"}, {"c\n", "C"}, {"d\n", "D"}}},
+		{"empty first body", `cat 3<<'\' <<'B'`, []document{{"", "\\"}, {"b\n", "B"}}},
+		{"tab stripping", `cat 3<<-$'\u00e9\\' <<'B'`, []document{{"\ta\n", "é\\"}, {"b\n", "B"}}},
+		{"CR in the delimiter", "cat 3<<'A\\\r' <<'B'", []document{{"a\n", "A\\\r"}, {"b\n", "B"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var src strings.Builder
+			src.WriteString(tc.opener + "\n")
+			for _, doc := range tc.documents {
+				src.WriteString(doc.body + doc.closing + "\n")
+			}
+			src.WriteString("echo after\n")
+
+			f, err := NewParser().Parse(strings.NewReader(src.String()), "")
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(f.Stmts), 2))
+			redirs := f.Stmts[0].Redirs
+			qt.Assert(t, qt.Equals(len(redirs), len(tc.documents)))
+			offset, line := uint(len(tc.opener)+1), uint(2)
+			for i, doc := range tc.documents {
+				r := redirs[i]
+				bodyBytes := uint(len(doc.body))
+				bodyLines := uint(strings.Count(doc.body, "\n"))
+				qt.Check(t, qt.Equals(r.ClosePos, NewPos(offset+bodyBytes, line+bodyLines, 1)))
+				if doc.body == "" {
+					qt.Check(t, qt.IsNil(r.Hdoc))
+				} else if qt.Check(t, qt.IsNotNil(r.Hdoc)) {
+					qt.Check(t, qt.Equals(r.Hdoc.Pos(), NewPos(offset, line, 1)))
+					qt.Check(t, qt.Equals(r.Hdoc.Lit(), doc.body))
+				}
+				offset += bodyBytes + uint(len(doc.closing)+1)
+				line += bodyLines + 1
+			}
+			qt.Check(t, qt.Equals(f.Stmts[1].Pos(), NewPos(offset, line, 1)))
+
+			var out strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&out, f)))
+			qt.Check(t, qt.Equals(out.String(), src.String()))
+
+			f, err = NewParser().Parse(strings.NewReader(out.String()), "")
+			qt.Assert(t, qt.IsNil(err))
+			var second strings.Builder
+			qt.Assert(t, qt.IsNil(NewPrinter().Print(&second, f)))
+			qt.Check(t, qt.Equals(second.String(), out.String()))
+		})
+	}
+}
+
+func TestUnicodeHeredocDelimiterRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	modes := []struct {
+		name             string
+		simplify, minify bool
+	}{
+		{"default", false, false},
+		{"simplify", true, false},
+		{"minify", true, true},
+	}
+	roundTrip := func(t *testing.T, p *Parser, f *File, simplify, minify bool) (string, *File) {
+		t.Helper()
+		printer := NewPrinter(Minify(minify))
+		if simplify {
+			Simplify(f)
+		}
+		var first, second strings.Builder
+		qt.Assert(t, qt.IsNil(printer.Print(&first, f)))
+		t.Logf("formatted: %q", first.String())
+		reparsed, err := p.Parse(strings.NewReader(first.String()), "")
+		qt.Assert(t, qt.IsNil(err))
+		if simplify {
+			Simplify(reparsed)
+		}
+		qt.Assert(t, qt.IsNil(printer.Print(&second, reparsed)))
+		qt.Assert(t, qt.Equals(second.String(), first.String()))
+		return first.String(), reparsed
+	}
+
+	escapes := []struct{ name, source, value string }{
+		{"short Unicode", `\u00e9`, "é"},
+		{"long Unicode", `\U0001f600`, "😀"},
+		{"hexadecimal and Unicode", `\xc3\xa9\u00e9`, "éé"},
+		{"octal and Unicode", `\303\251\u00e9`, "éé"},
+	}
+	fragments := []struct{ name, prefix, suffix, valuePrefix, valueSuffix string }{
+		{"ANSI-C only", "", "", "", ""},
+		{"mixed quoting", "pre'Q'", `"S"post`, "preQ", "Spost"},
+		{"dollar double quotes", `$"\\u00e9"`, "", `\u00e9`, ""},
+	}
+	suffixes := []struct{ name, word, layout, delimiter string }{
+		{"plain", "", "", ""},
+		{"trailing blanks", "", " \t", ""},
+		{"comment", "", " # comment", ""},
+		{"attached hash", "#tail", "", "#tail"},
+		{"quoted CR", "'\r'", "", "\r"},
+		{"ANSI-C CR", `$'\r'`, "", "\r"},
+		{"quoted backslash", `'\'`, "", "\\"},
+		{"double-quoted backslash and CR", "\"\\\r\"", "", "\\\r"},
+		{"bare CR before blanks", "\r", " \t", "\r"},
+		{"escaped bare CR before blanks", "\\\r", " \t", "\r"},
+		{"escaped bare CR before a comment", "\\\r", " # comment", "\r"},
+		{"escaped CRLF", "\\\r", "", "\r"},
+	}
+	layouts := []struct{ name, beforeWord, afterWord, beforeBody, indent, afterBody string }{
+		{"ordinary", "dump <<", "", "", "", ""},
+		{"tab stripping", "dump <<-", "", "", "\t", ""},
+		{"before quoted", "{ dump <&3; dump; } 3<<", " <<'NEXT'", "", "", "$(printf literal)\nNEXT\n"},
+		{"after unquoted", "{ dump <&3; dump; } 3<<PRE <<", "", "$(printf expanded)\nPRE\n", "", ""},
+	}
+
+	type acceptedInput struct{ name, source, formatted string }
+	var accepted []acceptedInput
+	checkSource := func(name, source string, wantParseError bool) {
+		for _, mode := range modes {
+			name := name + "/" + mode.name
+			t.Run(name, func(t *testing.T) {
+				t.Logf("source: %q", source)
+				p := NewParser(KeepComments(true))
+				f, err := p.Parse(strings.NewReader(source), "")
+				if wantParseError {
+					qt.Check(t, qt.ErrorMatches(err, `.*carriage return.*heredoc.*`))
+					return
+				}
+				if err != nil {
+					return
+				}
+				formatted, _ := roundTrip(t, p, f, mode.simplify, mode.minify)
+				accepted = append(accepted, acceptedInput{name, source, formatted})
+			})
+		}
+	}
+	// Bash keeps the apparent command in the body because the dollar
+	// double-quoted word closes on the literal escape spelling.
+	//
+	//   printf '%s\n' 'cat <<$"#\\u00e9"' body '#é' "printf 'EARLY\n'" '#\u00e9' "printf 'AFTER\n'" | LC_ALL=C.utf8 /usr/bin/bash
+	const translated = "cat <<$\"#\\\\u00e9\"\nbody\n#é\nprintf 'EARLY\\n'\n#\\u00e9\nprintf 'AFTER\\n'\n"
+	checkSource("translated literal delimiter", translated, false)
+	t.Run("simplify preserves delimiter words", func(t *testing.T) {
+		for _, op := range []string{"<<", "<<-"} {
+			f, err := NewParser().Parse(strings.NewReader(strings.Replace(translated, "<<", op, 1)), "")
+			qt.Assert(t, qt.IsNil(err))
+			parts := f.Stmts[0].Redirs[0].Word.Parts
+			before := parts[0]
+			Simplify(f)
+			qt.Check(t, qt.Equals(f.Stmts[0].Redirs[0].Word.Parts[0], before))
+		}
+	})
+	// Bash passes the CR to printf as an argument.
+	//
+	//   printf '%s\n' "printf '<%s>\\n' <<\$'\u00e9' "$'\r # note' body é "printf 'AFTER\n'" | LC_ALL=C.utf8 /usr/bin/bash
+	checkSource("CR argument after opener", "printf '<%s>\\n' <<$'\\u00e9' \r # note\nbody\né\nprintf 'AFTER\\n'\n", true)
+	checkSource("CR argument before opener", "printf '<%s>\\n' \r <<$'\\u00e9'\nbody\né\nprintf 'AFTER\\n'\n", true)
+	checkSource("CR argument after later word", "printf '<%s>\\n' <<$'\\u00e9' before \r after\nbody\né\n", true)
+	checkSource("literal leading dash", "cat << -$'\\u00e9'\nbody\n-é\nprintf 'AFTER\\n'\n", false)
+	for _, escape := range escapes {
+		for _, fragment := range fragments {
+			baseWord := fragment.prefix + "$'" + escape.source + "'" + fragment.suffix
+			baseDelimiter := fragment.valuePrefix + escape.value + fragment.valueSuffix
+			for _, suffix := range suffixes {
+				for _, layout := range layouts {
+					name := strings.Join([]string{escape.name, fragment.name, suffix.name, layout.name}, "/")
+					source := "dump() { while IFS= read -r line; do printf '%s\\n' \"$line\"; done; }\n" +
+						layout.beforeWord + baseWord + suffix.word + layout.afterWord + suffix.layout + "\n" +
+						layout.beforeBody + layout.indent + "$(printf literal)\\\n" + layout.indent + "body\n" +
+						layout.indent + baseDelimiter + suffix.delimiter + "\n" + layout.afterBody +
+						"printf '%s\\n' after\n"
+					checkSource(name, source, false)
+				}
+			}
+		}
+	}
+	qt.Assert(t, qt.IsTrue(len(accepted) > 0))
+
+	t.Run("constructed", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, want string
+			op         RedirOperator
+			parts      func() []WordPart
+		}{
+			{"trailing backslash", "é\\", Hdoc, func() []WordPart { return []WordPart{lit("\\")} }},
+			{"backslash before next fragment", "é\\X", Hdoc, func() []WordPart { return []WordPart{lit("\\"), sglQuoted("X")} }},
+			{"backslash in double quotes", "é\\", DashHdoc, func() []WordPart { return []WordPart{dblQuoted(lit("\\"))} }},
+			{"quoted controls", "é\t\v\f", Hdoc, func() []WordPart { return []WordPart{sglQuoted("\t\v\f")} }},
+			{"multiple words", "", Hdoc, func() []WordPart { return []WordPart{lit(" separated")} }},
+			{"unsafe UTF-8", "", Hdoc, func() []WordPart { return []WordPart{lit("\xff")} }},
+		} {
+			for _, mode := range modes {
+				t.Run(tc.name+"/"+mode.name, func(t *testing.T) {
+					r := &Redirect{Op: tc.op, Word: word(append([]WordPart{sglDQuoted(`\u00e9`)}, tc.parts()...)...), Hdoc: litWord("body\n")}
+					f := fullProg(&Stmt{Cmd: litCall("cat"), Redirs: []*Redirect{r}})
+					if tc.want == "" {
+						if mode.simplify {
+							Simplify(f)
+						}
+						var out strings.Builder
+						qt.Check(t, qt.IsNotNil(NewPrinter(Minify(mode.minify)).Print(&out, f)))
+						return
+					}
+					formatted, parsed := roundTrip(t, NewParser(), f, mode.simplify, mode.minify)
+					qt.Assert(t, qt.Equals(len(parsed.Stmts), 1))
+					got := parsed.Stmts[0].Redirs[0]
+					stop, _, _, err := decodeHeredocDelimiter(got)
+					qt.Assert(t, qt.IsNil(err))
+					qt.Check(t, qt.Equals(string(stop), tc.want))
+					qt.Assert(t, qt.IsTrue(got.ClosePos.IsValid()))
+					qt.Check(t, qt.Equals(formatted[got.ClosePos.Offset():], tc.want+"\n"))
+					qt.Check(t, qt.Equals(strings.TrimPrefix(got.Hdoc.Lit(), "\t"), "body\n"))
+				})
+			}
+		}
+	})
+
+	t.Run("bash", func(t *testing.T) {
+		t.Parallel()
+		bash := externalShells[LangBash]
+		bash.require(t)
+		type result struct {
+			stdout, stderr string
+			status         int
+		}
+		run := func(t *testing.T, source string) result {
+			t.Helper()
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, bash.cmd, "--noprofile", "--norc")
+			killCommandOnTestExit(cmd)
+			cmd.Env = append(cmd.Environ(), "LC_ALL=C.utf8", "BASH_ENV=")
+			cmd.Stdin = strings.NewReader(source)
+			var stdout, stderr strings.Builder
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			if err := cmd.Run(); err != nil && cmd.ProcessState.ExitCode() < 0 {
+				t.Fatalf("running Bash: %v", err)
+			}
+			return result{stdout.String(), stderr.String(), cmd.ProcessState.ExitCode()}
+		}
+		if got := run(t, `printf %s $'\u00e9'`); got != (result{stdout: "é"}) {
+			skipExternal(t, "Bash requires the C.utf8 locale")
+		}
+		for _, tc := range accepted {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				t.Logf("source: %q\nformatted: %q", tc.source, tc.formatted)
+				want := run(t, tc.source)
+				got := run(t, tc.formatted)
+				qt.Check(t, qt.Equals(got, want))
+			})
+		}
 	})
 }
 
@@ -6368,7 +7010,7 @@ func (c sanityChecker) visit(node Node) bool {
 			}
 			c.checkPos(node, r.OpPos, strs...)
 			if r.ClosePos.IsValid() {
-				stop, _, _ := unquotedWordBytes(r.Word)
+				stop, _, _, _ := decodeHeredocDelimiter(r)
 				c.checkPos(node, r.ClosePos, string(stop))
 			}
 		}
