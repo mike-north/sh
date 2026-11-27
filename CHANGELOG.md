@@ -7,7 +7,13 @@
 - **syntax**
   - Match heredoc delimiters only on complete lines
   - Decode ANSI-C escapes in heredoc delimiters and discard Unicode escape values above Bash's 31-bit range
-  - Reject non-ASCII `\u` and `\U` escapes in heredoc delimiters as locale-dependent
+  - Decode non-ASCII `\u` and `\U` escapes in heredoc delimiters as UTF-8 regardless of locale
+  - Reject heredoc delimiters with unsupported bytes or a leading tab after `<<-`
+  - Reject Unicode-escaped heredoc delimiters in files with bare carriage returns outside quotes or heredoc bodies,
+    or with a backslash followed by a carriage return outside a CR-preserving literal
+  - Preserve heredoc delimiter words during simplification and derive closing lines from the printed openers
+  - Keep trailing backslashes in quoted closing words out of the next queued heredoc body
+  - Report an error when formatting a source heredoc with a non-ASCII Unicode escape and no matched closing line
   - Preserve vertical tabs and form feeds when printing quoted words and heredocs
   - Preserve carriage returns before newlines in quoted words and quoted heredoc bodies
 
